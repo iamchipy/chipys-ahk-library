@@ -39,6 +39,117 @@ global ticker := "-"
 ; OnError("CUL_err_to_file")
 
 
+class UpdateHandler {
+	__new(download_url, script_name:="DefaultScriptName", display_name:="DefaultDisplayName"){
+		; build variables and set defaults
+		version_file_url := download_url "_version.txt"
+		this.script_name := script_name
+		this.download_url := download_url
+		this.display_name := display_name
+
+		; start the query for cloud version
+		this._query_latest_version_then_callback(version_file_url, (*)=>this.compare_versions_and_notify())
+	}
+
+	_query_latest_version_then_callback(version_file_url, callback_function){
+		; send a GET request to version_file_url then sets a callback
+		this.com_obj := ComObject("Msxml2.XMLHTTP")  ; used to make URL requests
+		this.com_obj.open("GET", version_file_url, true)
+		this.com_obj.onreadystatechange := callback_function
+		this.com_obj.send()
+	}
+
+	compare_versions_and_notify(){
+		; global APP_VERSION, bumper_active
+		; Receives the GET callback and compares versions
+
+		; check if callback has a completed state
+	    if (this.com_obj.readyState != 4){  ; Not done yet.
+	        return
+	    }
+	    ; check if http code is a success (200)
+	    if (this.com_obj.status == 200){
+	    	; skim off and line returns
+	    	cloud_version := strsplit(this.com_obj.responseText,"`r")[1]
+	    	; create a log
+	    	;log append_log("DEBUG: prompt_update -> comparing " cloud_version "(cloud) to " app_version "(current)")
+
+	    	; pass cloud version info to c
+	        if this._is_newer_version(cloud_version, app_version) == 1{
+	        	this.prompt_update(cloud_version)
+		    }else{
+		        TrayTip("UpdateCheck(" cloud_version ")`nYou are on the latest version. (" app_version ")", this.display_name,"Mute")
+	        	; prompt_update(cloud_version,True)
+		    }
+		}else (
+			msgbox("Unknown error when checking version")
+		)
+	}
+
+
+	_is_newer_version(v_one, v_two){
+		; receives version strings 1 & 2
+		; returns whichever is newer or 0/FALSE for neither
+
+		; clean strings
+		v_one := StrReplace(v_one, "`r", "")
+		v_one := StrReplace(v_one, "`n", "")
+		v_two := StrReplace(v_two, "`r", "")
+		v_two := StrReplace(v_two, "`n", "")
+
+		; split the variables into arrays for easy testing
+		v_one_array := StrSplit(v_one , ".")
+		v_two_array := StrSplit(v_two , ".")
+
+		; Check version lengths match
+		if v_one_array.Length != v_two_array.Length 
+			return -1
+
+		; compare arrays until we find a larger one
+		loop v_one_array.Length {
+			if Integer(v_one_array[A_Index]) > Integer(v_two_array[A_Index])
+				return 1
+			if Integer(v_one_array[A_Index]) < Integer(v_two_array[A_Index])
+				return 2				
+		}
+		; if we make it this far that v_two must be larger
+		return 0
+	}
+
+	prompt_update(cloud_version:=0, force_redownload:= False){
+		; writes a powershell string the terminate itself for update
+
+		undate_ps1_str := 'Stop-Process -Name "' this.script_name '"`n'
+		undate_ps1_str .= 'if(Test-Path -Path ".\' this.script_name '.old") {Remove-Item ".\' this.script_name '.old"}`n' 
+		undate_ps1_str .= 'Rename-Item -Path ".\' this.script_name '.exe" -NewName ".\' this.script_name '.old" -force`n'
+		undate_ps1_str .= 'if(Test-Path -Path ".\' this.script_name '.exe"){ Remove-Item ".\' this.script_name '.exe"}`n'
+		undate_ps1_str .= 'Rename-Item -Path ".\' this.script_name '.new" -NewName ".\' this.script_name '.exe" -force`n'
+		undate_ps1_str .= '& ".\' this.script_name '.exe"'
+
+		if !force_redownload
+			answer := msgbox("NEWER version (" cloud_version ") available`n`nhttps://chipy.dev",,"y/n")
+		if force_redownload or answer = "yes"{
+			download this.download_url, this.script_name ".new"
+			download this.download_url "_img.zip", script_name ".exe_img.zip"
+			this._unzip(A_WorkingDir "\" script_name ".exe_img.zip", A_WorkingDir "\img")  ;TODO possible dynamic file path inconsistancy
+			FileDelete("update.ps1")
+			FileAppend(undate_ps1_str, "update.ps1")
+
+			Run( "PowerShell.exe .\update.ps1")
+		}
+	}
+
+	; pulled from https://www.autohotkey.com/boards/viewtopic.php?t=103864
+	_unzip(source, destination){
+	    DirCreate(destination)
+		;https://www.autohotkey.com/boards/viewtopic.php?t=59016
+		; errors := RunWait( "PowerShell.exe -Command Expand-Archive -LiteralPath '" A_WorkingDir "\" source "' -DestinationPath " A_WorkingDir "\" destination,,"hide" )
+		errors := RunWait( "PowerShell.exe -Command Expand-Archive -LiteralPath '"  source "' -DestinationPath " destination)
+		;log if errors 
+			; pin( "WARN:error " errors " unzipping '" source "' to '" destination "'",True)
+	}	
+}
+
 
 class NatoDict {
 	__init(){
