@@ -4261,7 +4261,26 @@ clog(ErrClass, f:="SourceFunc") {
     return true
 }
 
-
+log(in_str) {
+	global LOG_LEVEL, LOG_PATH
+	; ; check log levels and filter
+	if ((inStr(in_str,"SPAM") and LOG_LEVEL <= 0) or 
+		(!inStr(in_str,"SPAM") and LOG_LEVEL <= 1) or 
+		(inStr(in_str,"DEBUG") and LOG_LEVEL <= 2) or 
+		(inStr(in_str,"INFO") and LOG_LEVEL <= 4) or 
+		(inStr(in_str,"WARN") and LOG_LEVEL <= 6) or 
+		(inStr(in_str,"ALERT") and LOG_LEVEL <= 8) or 
+		(inStr(in_str,"ERR") and LOG_LEVEL <= 9) or 
+		(inStr(in_str,"REPORT"))){
+			in_str := String(in_str)
+			try{
+				FileAppend(FormatTime(A_Now,"yyyyMMdd HH:mm:ss") "|: " in_str "`n", LOG_PATH)
+			}catch{
+				sleep 10
+				FileAppend(FormatTime(A_Now,"yyyyMMdd HH:mm:ss") "|: " in_str "`n", LOG_PATH)
+			}
+	}
+}
 
 
 
