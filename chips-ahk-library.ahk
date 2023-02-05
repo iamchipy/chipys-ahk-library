@@ -4220,6 +4220,49 @@ clear_tooltips(tooltip_index_to_clear:=-1){
 
 
 
+/*
+[][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][]
+[][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][]
+
+  									    TIMING SECTION
+
+[][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][]
+[][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][]
+*/
+
+fancy_sleep(ms_to_sleep_for, halting_flag:=false){
+	; sleepin in 200ms chunks until remaining sleep time is less than 200 and sets a final timer
+	wake_target_in_system_ticks := A_TickCount+ms_to_sleep_for
+	loop{
+		if mod((wake_target_in_system_ticks-A_TickCount),200)>1{
+			sleep 200
+		}else{
+			sleep(wake_target_in_system_ticks-A_TickCount)
+		}
+	}until((wake_target_in_system_ticks-A_TickCount)<1 or halting_flag)	
+}
+
+baseline_sleep_time(ms_to_sleep_for:=1, halting_flag:=false, base_delay_time:=100){
+	; function for quick sleep that allows "mutlitasking" with micro variation when imprecise sleep is acceptible
+	; accepts values smaller than base_delay_time as shorthand for multiple baseline periods ask bst(10)=sleep(1000+random)
+	if ms_to_sleep_for < base_delay_time{
+		; shortcut case for multiples of base delay
+		sleep ms_to_sleep_for*Random(.9*base_delay_time,1.1*base_delay_time)
+		return
+	}
+
+	roughened_time_to_sleep := Random(.9*ms_to_sleep_for,1.1*ms_to_sleep_for)
+	if roughened_time_to_sleep > 400{
+		fancy_sleep(roughened_time_to_sleep, halting_flag)
+	}else{
+		sleep(roughened_time_to_sleep)
+	}
+}
+
+bst(ms_to_sleep_for:=1, &halting_flag:=false, base_delay_time:=100){
+	; alias for baseline_sleep_time(ms_to_sleep_for:=1, halting_flag:=false, base_delay_time:=100)
+	baseline_sleep_time(ms_to_sleep_for:=1, halting_flag:=false, base_delay_time:=100)
+}
 
 /*
 [][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][]
