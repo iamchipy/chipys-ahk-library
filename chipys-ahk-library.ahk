@@ -2,13 +2,13 @@
 ; 7/1/21 updated for v2.0-134-d3d43350
 ;should be able to find it in (autohotkey.com/download/2.0/)
 if A_AhkVersion != "2.0.2" and !A_IsCompiled  ;no longer logical here: and silent_mode!=True
-	msgbox "You are running AHK v" A_AhkVersion "`n`rHowever CUL was written for v2.0-a134-d3d43350`n`nYou may need to download that exact version from autohotkey.com/download/2.0/ if you experince issue in the code"
+	msgbox "You are running AHK v" A_AhkVersion "`n`rHowever CAL was written for v2.0.2`n`nYou may need to download that exact version from autohotkey.com/download/2.0/ if you experince issue in the code"
 
 ;=======================================================
 ; CONSTANTS
 ;=======================================================
-global CULL_VERSION := "3.02"
-global ROAMING := A_AppData "\ChipysUtilityLibrary"
+global CAL_VERSION := "3.02"
+global ROAMING := A_AppData "\Chipys-AHK-Library"
 ; if (!FileExist(INI_FILE_NAME) ) FileAppend("",INI_FILE_NAME)
 ; global DEPS := DependencyManager()
 global GUI_FONT_SIZE := "20"		;scaled of base of 20 
@@ -46,6 +46,10 @@ global global_hud_obj2 := HUD(". .",2)
 global global_hud_obj3 := HUD(". . .",3)
 global blocking_user_input := "off"						;used as a global to know if BlockInput is on or off
 global ticker := "-"
+
+;=======================================================
+; built-in icon
+;=======================================================
 
 
 ; OnError("CUL_err_to_file")
@@ -161,7 +165,6 @@ class UpdateHandler {
 			; pin( "WARN:error " errors " unzipping '" source "' to '" destination "'",True)
 	}	
 }
-
 
 class NatoDict {
 	__init(){
@@ -1245,22 +1248,19 @@ class ConfigManagerTool {
 	}
 
 	wrong_type_handler(key, value := 0, alt_map:=""){
-		if DEBUG
-			ToolTip "WTH:`nhas: " this.c%alt_map%.has(key) " `nkey: " string(key) "(" type(key) ")`nvalue: " string(value) "(" type(value) ")"  , , 500, 5
+		log("INFO:wrong_type_handler(||has: " this.c%alt_map%.has(key) " ||key: " string(key) "(" type(key) ")||value: " string(value) "(" type(value) "))")
 		
 		; checks if this needs to be part of the primary map "c" or the supplementary map "c2" 
 		if !alt_map{
 			; checks to see if value already exists
 			if !this.c.has(key){
 				this.c[key] := ConfigEntry(key, this.section, this.fn)
-				if DEBUG
-					ToolTip "WTH:`NEW: " this.c.has(key) " `nkey: " string(key) "(" type(key) ")`nvalue: " string(value) "(" type(value) ")"  , , 600, 6
+				log("INFO:wrong_type_handler(NEW: " this.c.has(key) " ||key: " string(key) "(" type(key) ")||value: " string(value) "(" type(value) ")")
 			}
 		}else{
 			if !this.c2.has(key){
 				this.c2[key] := ConfigEntry(key, this.section, this.fn)
-				if DEBUG
-					ToolTip "WTH:`NEW-alt: " this.c2.has(key) " `nkey: " string(key) "(" type(key) ")`nvalue: " string(value) "(" type(value) ")"  , , 600, 6
+				log("INFO:wrong_type_handler(NEW-alt: " this.c2.has(key) " ||key: " string(key) "(" type(key) ")||value: " string(value) "(" type(value) ")")
 			}			
 		}
 	}
@@ -1289,19 +1289,19 @@ class ConfigManagerTool {
 	}
 
 	load_all(){
-		; ; checks if the file exits
-		; if !FileExist(a_workingdir "\" this.fn){
-		; 	;if it doesn't
-		; 	;leave a log
-		; 	FileAppend(LOG_FILE_NAME,A_Now " - Could not locate '" a_workingdir "\" this.fn "' to load config data")
-		; 	;exit load process
-		; 	return
-		; }
+		; checks if the file exits
+		if !FileExist(this.fn){
+			;if it doesn't
+			;leave a log
+			log("WARN: CfgMgr: Could not locate '" this.fn "' to load config data")
+			;exit load process
+			return
+		}
 		; msgbox a_workingdir "\" this.fn "`n" FileExist(a_workingdir "\" this.fn ) "`n" this.section
 
 		Try{
 			;reads section from ini
-			temp_read := iniread(a_workingdir "\" this.fn, this.section)	
+			temp_read := iniread(this.fn, this.section)	
 			;now build map with values from string 
 			lines_array := StrSplit(temp_read, ["`n"])			;split each line in string 
 			for l in lines_array{								;loop for each line
@@ -1312,14 +1312,13 @@ class ConfigManagerTool {
 				this.wrong_type_handler(pairs_array[1], pairs_array[2])
 				; stores the data in the "c" map
 				this.c[pairs_array[1]].value := pairs_array[2]
-				if debug
-					tooltip "line:`n" l "`n`n" pairs_array[1] " +> " pairs_array[2]
+				log("INFO:Load_ALL(line:" l "||" pairs_array[1] " +> " pairs_array[2] )
 			}
 
 		}catch OSError as e{
-			MsgBox "Unable to find file or section:  [" this.section "] in:`n" a_workingdir "\" this.fn "`n`nYou might need to setup this section's settings"	
+			MsgBox "Unable to find file or section:  [" this.section "] in:`n" this.fn "`n`nYou might need to setup this section's settings"	
 		}catch any as e{
-			temp := CULErrorHandler(e,"Error loading settings from section[" this.section "] of " a_workingdir "\" this.fn " (if this is the first time you are seeing this it should be safe to ignore this message)`n`n")
+			temp := CULErrorHandler(e,"Error loading settings from section[" this.section "] of " this.fn " (if this is the first time you are seeing this it should be safe to ignore this message)`n`n")
 		}
 	}
 
@@ -3256,6 +3255,8 @@ class CULErrorHandler {
 		; if error_obj.hasprop("extra")
 		; 	more := error_obj.extra
 		MsgBox "CULErr: " info_txt "`n`nMsg: " error_obj.message "`nWhat: " error_obj.what "`nMore: " more "`nFile: " error_obj.file "`nLine: " error_obj.line "`n`n`n`n`STACK: " error_obj.stack
+		
+		throw error_obj
 	}
 }
 
@@ -4464,4 +4465,48 @@ PostMessage, (msg="D") ? 0x201 : (msg="U") ? 0x202 : 0x203, , %lParam%, , %id%
  
 }
 
+
+
 */
+
+
+
+/* 
+inline included icon for CAL
+	IconDataHex := "
+	( Join
+	000001000100101010000100040028010000160000002800000010000000200000000100040000000000C00000
+	0000000000000000000000000000000000C6080800CE101000CE181800D6212100D6292900E13F3F00E7525200
+	EF5A5A00EF636300F76B6B00F7737300FF7B7B00FFC6C600FFCEC600FFDEDE00FFFFFF00CCCCCCCCCCCCCCCCC0
+	0000000000000CC11111111111111CC22222CFFE22222CC33333CFFE33333CC44444CFFE44444CC55555CFFE55
+	555CC55555CFFE55555CC55555CFFE55555CC66666CFFE66666CC77777777777777CC88888CFFC88888CC99999
+	CFFC99999CCAAAAAAAAAAAAAACCBBBBBBBBBBBBBBCCCCCCCCCCCCCCCCC00000000000000000000000000000000
+	000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+	000000
+	)"
+
+	nSize:=StrLen(IconDataHex)//2
+
+	new_size := VarSetStrCapacity( &IconData, (nSize) )
+	data_test := Buffer(new_size)
+	; MCode by Laszlo Hars: http://www.autohotkey.com/forum/viewtopic.php?t=21172
+	
+	Loop nSize {
+		tooltip "0x" . SubStr(IconDataHex,2*A_Index-1,2) "`n" type(IconData) IconData "`n" A_Index-1
+		NumPut( "Char", "0x" SubStr(IconDataHex,2*A_Index-1,2), data_test)
+		; NumPut( "Char", "0x" . SubStr(IconDataHex,2*A_Index-1,2), IconData, A_Index-1)
+	}
+	IconDataHex := ""                                          ; Hex contents needed no more
+	
+	hICon := DllCall( "CreateIconFromResourceEx", 
+						"UInt",numget(data_test,"Char"), 
+						"UInt",nSize, 
+						"Int",1, 
+						"UInt",0x30000, 
+						"Int",16, 
+						"Int",16, 
+						"UInt",0 )
+
+	TraySetIcon(hICon)
+
+	*/
