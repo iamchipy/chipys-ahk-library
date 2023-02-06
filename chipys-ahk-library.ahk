@@ -17,6 +17,7 @@ global NATO_UI_FONT := "Share Tech Mono.ttf"
 ;=======================================================
 ; CONSTANTS with defaults, expected to be overwritten by scripts
 ;=======================================================
+
 global SCRIPT_NAME := "DefaultChipysUtilityLibraryName"
 global LOG_LEVEL := 5  ; scale of 0-10 higher value = more important to see AKA 9/10 = critical
 global CFG_PATH := SCRIPT_NAME ".cfg"
@@ -24,6 +25,17 @@ global LOG_PATH := SCRIPT_NAME ".log"
 
 global DEBUG := LOG_LEVEL  ; to be discontinued in favour of LOG_LEVEL
 global INI_FILE_NAME := LOG_PATH ; to be discontinued in favour of CFG_FILE_NAME
+
+APP_VERSION := "0.0.1", unused := "custom var"
+;@Ahk2Exe-Let U_version = %A_PriorLine~U)^(.+"){1}(.+)".*$~$2%
+;@Ahk2Exe-SetCopyright    Freeware written by Chipy
+;@Ahk2Exe-SetCompanyName  Chipy.dev
+;@Ahk2Exe-SetFileVersion  %U_version%
+;@Ahk2Exe-SetName         Chipy's AHK Library
+;@Ahk2Exe-SetDescription  If you are seeing you have used the chipys-ahk-library without seettings your own ahk2exe instructions
+;@Ahk2Exe-SetOrigFilename chipys-ahk-library.ahk
+;@Ahk2Exe-SetMainIcon     chipys-ahk-library.ico
+;@Ahk2Exe-Base 			  Unicode 64-bit.bin
 
 
 ;=======================================================
