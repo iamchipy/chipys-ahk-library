@@ -7,7 +7,7 @@ if A_AhkVersion != "2.0.2" and !A_IsCompiled  ;no longer logical here: and silen
 ;=======================================================
 ; CONSTANTS
 ;=======================================================
-global CAL_VERSION := "3.02"
+global CAL_VERSION := "3.03"
 global ROAMING := A_AppData "\Chipys-AHK-Library"
 ; if (!FileExist(INI_FILE_NAME) ) FileAppend("",INI_FILE_NAME)
 ; global DEPS := DependencyManager()
@@ -894,6 +894,14 @@ class ConfigManagerTool {
 		this.section_alt := this.section "_alt"
 
 		this.load_all()
+	}
+
+	change_single_variable(config_entry){
+		desired_hotkey := Inputbox("Select hotkey for '" config_entry.key "' function")
+		if desired_hotkey.result = "OK"{
+			config_entry.value := desired_hotkey.value
+			msgbox "hotkey for " config_entry.key " has been set to " config_entry.value
+		}
 	}
 
 	info(gui_obj, assist:=""){
