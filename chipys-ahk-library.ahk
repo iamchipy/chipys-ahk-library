@@ -856,6 +856,7 @@ class ConfigEntry {
 		; handles toggle options
 		if this.hasprop("has_toggle_default")
 			IniWrite this.toggle, this.fn, this.section, this.key "_toggle"
+
 	}
 
 	_load(){
@@ -896,12 +897,18 @@ class ConfigManagerTool {
 		this.load_all()
 	}
 
-	change_single_variable(config_entry){
+	change_single_variable(config_entry, rebind_hotkey:=False){
+		; changes the value of a single ConfigEntry (with the flag to update hotkey too)
 		desired_hotkey := Inputbox("Select hotkey for '" config_entry.key "' function")
 		if desired_hotkey.result = "OK"{
-			config_entry.value := desired_hotkey.value
+		
+			if rebind_hotkey{
+				this._bind()
+			}
+			this._save(config_entry.key, desired_hotkey.value)
 			msgbox "hotkey for " config_entry.key " has been set to " config_entry.value
 		}
+		
 	}
 
 	info(gui_obj, assist:=""){
@@ -969,17 +976,17 @@ class ConfigManagerTool {
 		}
 	}
 
-	bind_all_keys(){ ;discontinuted
-		for key, obj in this.c{
-			try{
-				if obj.type = "hotkey"
-					this._bind(obj.value, key, obj.toggle)
-			}catch any as e{
-				CULErrorHandler(e,"Encounterd possible faulty/old ini keybind entry: `n'" key "' -> '" obj.value "' `Will now attempt to heal/clean the error")
-				IniDelete this.fn, this.section , key
-			}
-		}
-	}
+	; bind_all_keys(){ ;discontinuted
+	; 	for key, obj in this.c{
+	; 		try{
+	; 			if obj.type = "hotkey"
+	; 				this._bind(obj.value, key, obj.toggle)
+	; 		}catch any as e{
+	; 			CULErrorHandler(e,"Encounterd possible faulty/old ini keybind entry: `n'" key "' -> '" obj.value "' `Will now attempt to heal/clean the error")
+	; 			IniDelete this.fn, this.section , key
+	; 		}
+	; 	}
+	; }
 
 	unbind_all(){
 		for key, obj in this.c{
@@ -1339,10 +1346,10 @@ class ConfigManagerTool {
 		}		
 	}
 
-	_save(key, value, custom_section:=0){
+	_save(key, value){
 		this.wrong_type_handler(key, value)
-		this.c[key].value := value	
-		this.c[key]._save()
+		; this.c[key].value := value	
+		this.c[key]._save(value)
 	}
 
 	_load(){
