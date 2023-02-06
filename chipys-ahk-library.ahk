@@ -885,7 +885,7 @@ class ConfigManagerTool {
 		;sets default for custom section is != 0
 		((file_name)?(this.fn:=file_name):(this.fn:=INI_FILE_NAME))					;accepts custom name or uses normal
 		((custom_section)?(this.section:=custom_section):(this.section:="ConfigManager"))
-		((client_name)?(this.client_name:=client_name):(MsgBox custom_section " MISSING client name"))
+		((client_name)?(this.client_name:=client_name):(MsgBox(custom_section " MISSING client name")))
 		this.gui_size_limit_height := 20
 
 		this.c := map()		;map of settings in dict/map form for easy of saving, loading, and recall
@@ -2055,7 +2055,7 @@ class ScenarioDetector {
 
 		if this.type = "pixel"{
 			r := 2
-			if(PixelSearch(x,y,this.x-r,this.y-r,this.x+r,this.y+r,this.prop["color_target"],variation)){
+			if(PixelSearch(&x,&y,this.x-r,this.y-r,this.x+r,this.y+r,this.prop["color_target"],variation)){
 				this.last_coords := [x, y]
 				this.x := x
 				this.y := y	
