@@ -783,6 +783,7 @@ class ConfigEntry {
 		this.value := 0
 		this.toggle := 0
 		this.pipelist:= ["none"]						;creates an array and init with "none"
+		this.always := false							;flag for setting hotkeys to be window specific
 
 		;load values
 		this.key := key
@@ -815,6 +816,8 @@ class ConfigEntry {
 				}
 			}
 		}else if type(this.acc) = "string"{				;assumes it's to be used as is in list prop 
+			if strLower(this.acc) = "always_active"			;flag for allowing hotkeys to be always active
+				this.always := True
 			this.pipelist:= this.acc					;creates a pipe-separated-list
 		}
 		this._load()
@@ -897,16 +900,16 @@ class ConfigManagerTool {
 		this.load_all()
 	}
 
-	change_single_variable(config_entry, rebind_hotkey:=False){
+	change_single_variable(config_entry){
 		; changes the value of a single ConfigEntry (with the flag to update hotkey too)
-		desired_hotkey := Inputbox("Select hotkey for '" config_entry.key "' function")
+		desired_hotkey := Inputbox("Set new value for '" config_entry.key "'. `nExtra: " config_entry.info)
 		if desired_hotkey.result = "OK"{
-		
-			if rebind_hotkey{
-				this._bind()
-			}
+			log("INFO:User requesting to change '" config_entry.key "'")
 			this._save(config_entry.key, desired_hotkey.value)
-			msgbox "hotkey for " config_entry.key " has been set to " config_entry.value
+			if config_entry.type = "hotkey" {
+				this._bind(config_entry.value,config_entry.key)
+			}
+			msgbox "Hotkey for " config_entry.key " has been set to " config_entry.value
 		}
 		
 	}
@@ -922,8 +925,7 @@ class ConfigManagerTool {
 
 	_unbind(key_name,func_name:=""){
 		try{
-			; if DEBUG
-			; 	ToolTip "unbind " key_name " from doing " func_name
+			log("SPAM:Unbinding '" key_name "'")
 			Hotkey key_name, "off"
 		}
 	}
@@ -934,28 +936,38 @@ class ConfigManagerTool {
 		; - key_name (STRING) containing name of desired hotkey
 		; - func_name (STRING) containing name of function
 		; - always_on (BOOL) used to enable this hotkey outside of normal application context		
+		
+		; just to be safe we unbind first
+		try
+			this._unbind(key_name)
 		try{
-			; MsgBox "func: " func_name "`nkey: " key_name "`nclient: " this.client_name "`n" always_on
-			if key_name = ""{	;if keyname is non it means disable 
-				hotif  ;new was to turn of context sensitivity https://lexikos.github.io/v2/docs/commands/HotIf.htm
+			config_entry_always := this.c[func_name].always
+			log("SPAM:Binding " key_name " as the hotkey to exec " func_name  " [Always=" always_on "/" config_entry_always "]")
+			if key_name = ""{	;if keyname is none/blank it means disable 
+				hotif  			;new was to turn of context sensitivity https://lexikos.github.io/v2/docs/commands/HotIf.htm
 				Hotkey "$~!#1", (*)=> func_name, "off"
 				Return 1	;return success as unbound
 			}
-			if DEBUG 
-				tooltip "binding " key_name " to " func_name " always: " always_on,,4
-			;if always_on hotkey trigger only in app else set to always
 
-			HotIfWinActive this.client_name		;make all hotkeys only work IN-CLIENT only by default
-			if always_on 								;if we indicate to always work, only then do we clear the inf
+			;if always_on hotkey trigger only in app else set to alway
+			HotIfWinActive this.client_name				;make all hotkeys only work IN-CLIENT only by default
+			if always_on or config_entry_always			;if we indicate to always work, only then do we clear the inf
 				hotif 							        ; set hotkey to always work
 
-			;MsgBox "binding:`nfunc: " func_name "`nkey: " key_name "`nclient: " this.client_name "`nalways:" always_on
-			Hotkey key_name, (*)=> %func_name%()
+			; check to handle nested/class/object.method calls
+			multi_name := StrSplit(func_name,".")
+			if multi_name.Length > 1{
+				; handle calls for a method 1 and 2 deep so far (MAY NEED TO EXPAND)
+				if multi_name.Length = 2
+					Hotkey key_name, (*)=> %multi_name[1]%.%multi_name[2]%()
+				else if multi_name.Length = 2
+					Hotkey key_name, (*)=> %multi_name[1]%.%multi_name[2]%.%multi_name[3]%()			
+			}else{
+				; default direct call
+				Hotkey key_name, (*)=> %func_name%()
+			}
+			log("INFO:'" key_name "' bound to '" func_name  "()' [Always=" always_on "/" config_entry_always "]")
 			Return 1		;return success as bound
-		}catch any as e{   ;ValueError
-			MsgBox "read:`nfunc: " func_name "`nkey: " key_name
-    		MsgBox Format("{1}: {2}.`n`nFile:`t{3}`nLine:`t{4}`nWhat:`t{5}`nStack:`n`n`n{6}",
-    					  type(e), e.Message, e.File, e.Line, e.What, e.Stack)
 		}catch TargetError {
 			msgbox "Invalid target (method/function) for hotkey to assign`r`n`r`n" Format("{1}: {2}.`n`nFile:`t{3}`nLine:`t{4}`nWhat:`t{5}`nStack:`n{6}",
     					  type(e), e.Message, e.File, e.Line, e.What, e.Stack) 
@@ -965,28 +977,12 @@ class ConfigManagerTool {
 				MsgBox "Could not bind '" func_name "' to the [" key_name "] key.`r`n'" func_name "()' does not exist.", "Keybinding error!", 48
 				Return 0
 			}
-			/* section taken out in favor of proper catch statments (and learning them)
-			else if ErrorLevel == 2{
-				MsgBox key_name " is not a valid hotkey recognized by this system", "Keybinding error!", 48
-				Return 0
-			}
-			*/ 
 			;Exception(Message , What, Extra) {file\line}
 			MsgBox("err: " e.Message, "Keybinding error!", 48)
+			MsgBox "read:`nfunc: " func_name "`nkey: " key_name
+    		throw e
 		}
 	}
-
-	; bind_all_keys(){ ;discontinuted
-	; 	for key, obj in this.c{
-	; 		try{
-	; 			if obj.type = "hotkey"
-	; 				this._bind(obj.value, key, obj.toggle)
-	; 		}catch any as e{
-	; 			CULErrorHandler(e,"Encounterd possible faulty/old ini keybind entry: `n'" key "' -> '" obj.value "' `Will now attempt to heal/clean the error")
-	; 			IniDelete this.fn, this.section , key
-	; 		}
-	; 	}
-	; }
 
 	unbind_all(){
 		for key, obj in this.c{
@@ -1263,25 +1259,24 @@ class ConfigManagerTool {
 	}
 
 	wrong_type_handler(key, value := 0, alt_map:=""){
-		log("INFO:wrong_type_handler(||has: " this.c%alt_map%.has(key) " ||key: " string(key) "(" type(key) ")||value: " string(value) "(" type(value) "))")
+		log("SPAM:wrong_type_handler(||has: " this.c%alt_map%.has(key) " ||key: " string(key) "(" type(key) ")||value: " string(value) "(" type(value) "))")
 		
 		; checks if this needs to be part of the primary map "c" or the supplementary map "c2" 
 		if !alt_map{
 			; checks to see if value already exists
 			if !this.c.has(key){
 				this.c[key] := ConfigEntry(key, this.section, this.fn)
-				log("INFO:wrong_type_handler(NEW: " this.c.has(key) " ||key: " string(key) "(" type(key) ")||value: " string(value) "(" type(value) ")")
+				log("SPAM:wrong_type_handler(NEW: " this.c.has(key) " ||key: " string(key) "(" type(key) ")||value: " string(value) "(" type(value) ")")
 			}
 		}else{
 			if !this.c2.has(key){
 				this.c2[key] := ConfigEntry(key, this.section, this.fn)
-				log("INFO:wrong_type_handler(NEW-alt: " this.c2.has(key) " ||key: " string(key) "(" type(key) ")||value: " string(value) "(" type(value) ")")
+				log("SPAM:wrong_type_handler(NEW-alt: " this.c2.has(key) " ||key: " string(key) "(" type(key) ")||value: " string(value) "(" type(value) ")")
 			}			
 		}
 	}
-
-	; stores data enties in C/C2 maps of this obj
-	ini(key, delete_if_blank:=0, default_value:=0, ctr_type:="edit", info:='',accessories:=0){
+	
+	ini(key, delete_if_blank:=0, default_value:=0, ctr_type:="edit", info:='',accessories:=0){ ; stores data enties in C/C2 maps of this obj
 		if ctr_type = "DropDownList"{
 			this.c2[key]:=ConfigEntry(	key,
 										this.section_alt,
@@ -1312,7 +1307,6 @@ class ConfigManagerTool {
 			;exit load process
 			return
 		}
-		; msgbox a_workingdir "\" this.fn "`n" FileExist(a_workingdir "\" this.fn ) "`n" this.section
 
 		Try{
 			;reads section from ini
@@ -1327,7 +1321,12 @@ class ConfigManagerTool {
 				this.wrong_type_handler(pairs_array[1], pairs_array[2])
 				; stores the data in the "c" map
 				this.c[pairs_array[1]].value := pairs_array[2]
-				log("INFO:Load_ALL(line:" l "||" pairs_array[1] " +> " pairs_array[2] )
+				log("SPAM:Load_ALL(line:" l "		||" pairs_array[1] " +> " pairs_array[2] )
+				try
+					if this.c[pairs_array[1]].type = "hotkey" {
+						log("SPAM:Auto-binding . . . ")
+						this._bind(pairs_array[2],pairs_array[1])
+					}
 			}
 
 		}catch OSError as e{
