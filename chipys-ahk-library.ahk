@@ -18,8 +18,8 @@ global NATO_UI_FONT := "Share Tech Mono.ttf"
 ; CONSTANTS with defaults, expected to be overwritten by scripts
 ;=======================================================
 /*
-||0-1[SPAM]Spam messages just to report everything
-||2-2[DEBUG]Debugging info for detailed reports on things
+||0-0[SPAM]Spam messages just to report everything
+||1-2[DEBUG]Debugging info for detailed reports on things
 ||3-4[INFO]Info for verbose reports even a user might read
 ||5-6[WARN]Warnings for things a user might need to know are important
 ||7-8[ALERT]Alerts for when you ned to let the user know something is WRONG or failed
@@ -910,18 +910,22 @@ class ConfigManagerTool {
 		this.load_all()
 	}
 
-	change_single_variable(config_entry){
+	change_single_variable(config_entry, callback_func := False){
 		; changes the value of a single ConfigEntry (with the flag to update hotkey too)
+		; Callback_Func can be specified to be called after success/okay with the new value passed as a result
+		; callback_func.call(new_value)
 		desired_hotkey := Inputbox("Set new value for '" config_entry.key "'. `nExtra: " config_entry.info)
 		if desired_hotkey.result = "OK"{
-			log("INFO:User updated value of '" config_entry.key "' to '" config_entry.value "'")
+			log("INFO:User updated value of '" config_entry.key "' to '" desired_hotkey.value "'")
 			this._save(config_entry.key, desired_hotkey.value)
 			if config_entry.type = "hotkey" {
 				this._bind(config_entry.value,config_entry.key)
 			}
 			msgbox "Value of variable '" config_entry.key "' changed to '" config_entry.value "'"
+			if callback_func {
+				callback_func.call(desired_hotkey.value)
+			}			
 		}
-		
 	}
 
 	info(gui_obj, assist:=""){
@@ -1335,7 +1339,7 @@ class ConfigManagerTool {
 				this.wrong_type_handler(pairs_array[1], pairs_array[2])
 				; stores the data in the "c" map
 				this.c[pairs_array[1]].value := pairs_array[2]
-				log("INFO:Load_ALL(line:" l "		||" pairs_array[1] " +> " pairs_array[2] )
+				log("DEBUG:Load_ALL(line:" l "		||" pairs_array[1] " +> " pairs_array[2] )
 				try
 					if this.c[pairs_array[1]].type = "hotkey" {
 						log("SPAM:Auto-binding . . . ")
