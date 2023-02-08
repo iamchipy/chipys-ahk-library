@@ -2523,7 +2523,7 @@ class UpdateTool{
 	}
 
 	update_now(){
-		GENERIC_MISSING_ELEMENT_MSGBOX("Self Update Discontinuted")
+		log('WARN:GENERIC_MISSING_ELEMENT_MSGBOX("Self Update Discontinuted")')
 		Return
 		/*
 		; Download "https://raw.githubusercontent.com/sgmsm/CARKA/master/CARKA_Installer.exe", "CARKA_Installer.exe"	
@@ -2911,7 +2911,7 @@ class DependencyManager {
 		}
 		; add try block and TODO https://github.com/sgmsm/c2_public/raw/master/img/tray_loaded.ico
 		fixed_url := strreplace(file_url,"\","/")
-		GENERIC_MISSING_ELEMENT_MSGBOX(file_name)
+		log("WARN: GENERIC_MISSING_ELEMENT_MSGBOX(file_name)")
 		Return
 		; download(fixed_url, A_workingdir file_name)
 		; if ErrorLevel
