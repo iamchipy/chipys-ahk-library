@@ -17,12 +17,19 @@ global NATO_UI_FONT := "Share Tech Mono.ttf"
 ;=======================================================
 ; CONSTANTS with defaults, expected to be overwritten by scripts
 ;=======================================================
-
+/*
+||0-1[SPAM]Spam messages just to report everything
+||2-2[DEBUG]Debugging info for detailed reports on things
+||3-4[INFO]Info for verbose reports even a user might read
+||5-6[WARN]Warnings for things a user might need to know are important
+||7-8[ALERT]Alerts for when you ned to let the user know something is WRONG or failed
+||9-9[ERR]Error reports (critical possible even terminatino/crash levels)
+||+10[REPORT]Forced display for things that just need to be logged always
+*/
+global LOG_LEVEL := 5 
 global SCRIPT_NAME := "DefaultChipysUtilityLibraryName"
-global LOG_LEVEL := 5  ; scale of 0-10 higher value = more important to see AKA 9/10 = critical
 global CFG_PATH := SCRIPT_NAME ".cfg"
 global LOG_PATH := SCRIPT_NAME ".log"
-
 global DEBUG := LOG_LEVEL  ; to be discontinued in favour of LOG_LEVEL
 global INI_FILE_NAME := LOG_PATH ; to be discontinued in favour of CFG_FILE_NAME
 
@@ -907,7 +914,7 @@ class ConfigManagerTool {
 		; changes the value of a single ConfigEntry (with the flag to update hotkey too)
 		desired_hotkey := Inputbox("Set new value for '" config_entry.key "'. `nExtra: " config_entry.info)
 		if desired_hotkey.result = "OK"{
-			log("INFO:User requesting to change '" config_entry.key "'")
+			log("INFO:User updated value of '" config_entry.key "' to '" config_entry.value "'")
 			this._save(config_entry.key, desired_hotkey.value)
 			if config_entry.type = "hotkey" {
 				this._bind(config_entry.value,config_entry.key)
@@ -1878,6 +1885,9 @@ class Action {
 }
 
 class ScenarioDetector {
+	/*
+	Usage: instantiate a ScenarioDetector obj
+	*/
 	__init(){
 		;define variables that will get saved or need defaults
 		this.coord_mode_to_use := "Screen"
@@ -2145,8 +2155,7 @@ class ScenarioDetector {
 	}	
 
 	load(use_static_coords:=0){
-		if DEBUG
-			ToolTip this.hrid " loading..." this.hrid
+		log("DEBUG:" this.hrid " loading..." this.hrid) 
 		;try load search area
 		if !use_static_coords{						;use_static_coords is for a hardcoded area or pixel (not recommended)
 			try{									;try block with silent catch for option properties
@@ -2463,98 +2472,102 @@ class ScenarioDetector {
 }
 
 class UpdateTool{
-	__new(current_version, remote_version_url, remote_installer_url, change_log_url:="", tray_icons:=0){
-		this.change_log_url:=change_log_url
-		this.current_version := current_version
-		this.v_url := remote_version_url
-		this.installer_url := remote_installer_url
-		SplitPath remote_installer_url , &n, , &e
-		this.installer_name := n  ;"." e    ;concat filename + extention for downloading
-		this.last_known_remote_version := "2.00"
-		this.icons:=tray_icons
+	; Class discontined in favour of class UpdateHandler 
+	; PLEASE USE THAT
+	
 
-		this.populated := 0						;info check to allow early calls to know if we've fetched remote info yet
-		this.is_update_available := 0 			;bool telling up if remote is newer		
-	}
+	; __new(current_version, remote_version_url, remote_installer_url, change_log_url:="", tray_icons:=0){
+	; 	this.change_log_url:=change_log_url
+	; 	this.current_version := current_version
+	; 	this.v_url := remote_version_url
+	; 	this.installer_url := remote_installer_url
+	; 	SplitPath remote_installer_url , &n, , &e
+	; 	this.installer_name := n  ;"." e    ;concat filename + extention for downloading
+	; 	this.last_known_remote_version := "2.00"
+	; 	this.icons:=tray_icons
 
-	_populate_info(is_forced:=0){ ;this method allows for the obj creation without 'hanging' while GET-requests go on
-		this.is_update_available := this.is_remote_newer()
-		this.populated := 1
-		disp("Checking for updates . . .", 3) 
-		if !is_forced && this.is_remote_newer()
-			this.prompt()
-	}
+	; 	this.populated := 0						;info check to allow early calls to know if we've fetched remote info yet
+	; 	this.is_update_available := 0 			;bool telling up if remote is newer		
+	; }
 
-	_get_remote_version(){
-		try{
-			ldata := url_get(this.v_url)
-		}catch any as e{
-			CULErrorHandler(e, "update-tool-")
-		}
-		if(!ldata){
-			;TODO reduce msgbox interupts
-			MsgBox "Could not connect to remote server!`r`nUnable to update.`r`nerror 433: while trying to check remote version "
-			Return 0
-		}
-		this.last_known_remote_version := round(float(ldata),2)		;round to .00
-		Return ldata
-	}
+	; _populate_info(is_forced:=0){ ;this method allows for the obj creation without 'hanging' while GET-requests go on
+	; 	this.is_update_available := this.is_remote_newer()
+	; 	this.populated := 1
+	; 	disp("Checking for updates . . .", 3) 
+	; 	if !is_forced && this.is_remote_newer()
+	; 		this.prompt()
+	; }
 
-	is_remote_newer(){
-		if this._get_remote_version() > this.current_version{
-			if this.icons
-				TraySetIcon(this.icons[1],,1)
-			Return 1
-		}
-		Return 0
-	}
+	; _get_remote_version(){
+	; 	try{
+	; 		ldata := url_get(this.v_url)
+	; 	}catch any as e{
+	; 		CULErrorHandler(e, "update-tool-")
+	; 	}
+	; 	if(!ldata){
+	; 		;TODO reduce msgbox interupts
+	; 		MsgBox "Could not connect to remote server!`r`nUnable to update.`r`nerror 433: while trying to check remote version "
+	; 		Return 0
+	; 	}
+	; 	this.last_known_remote_version := round(float(ldata),2)		;round to .00
+	; 	Return ldata
+	; }
 
-	prompt(check_latest_version:=1){
-		if !this.populated
-			this._populate_info(1)
-		if check_latest_version
-			this._get_remote_version()
-		version_report:="Update to v" round(this.last_known_remote_version,2) " (from v" this.current_version ")"
-		changes_txt:="No changelog found"
-		if this.change_log_url
-			changes_txt := url_get(this.change_log_url)
+	; is_remote_newer(){
+	; 	if this._get_remote_version() > this.current_version{
+	; 		if this.icons
+	; 			TraySetIcon(this.icons[1],,1)
+	; 		Return 1
+	; 	}
+	; 	Return 0
+	; }
 
-		temp := UITool.UpdatePrompt((*)=>this.update_now(),"Do you wish to update?",version_report, changes_txt)
-	}
+	; prompt(check_latest_version:=1){
+	; 	if !this.populated
+	; 		this._populate_info(1)
+	; 	if check_latest_version
+	; 		this._get_remote_version()
+	; 	version_report:="Update to v" round(this.last_known_remote_version,2) " (from v" this.current_version ")"
+	; 	changes_txt:="No changelog found"
+	; 	if this.change_log_url
+	; 		changes_txt := url_get(this.change_log_url)
 
-	update_now(){
-		log('WARN:GENERIC_MISSING_ELEMENT_MSGBOX("Self Update Discontinuted")')
-		Return
-		/*
-		; Download "https://raw.githubusercontent.com/sgmsm/CARKA/master/CARKA_Installer.exe", "CARKA_Installer.exe"	
-		temp:=UITool.ProgressBar("Downloading . . .")
-		download this.installer_url, a_workingdir "\" this.installer_name	
-		if DEBUG
-			tooltip "setting to 50% progress"
-		temp.update(50)
-		while !FileExist(a_workingdir "\" this.installer_name){
-			sleep 500
-		}	
+	; 	temp := UITool.UpdatePrompt((*)=>this.update_now(),"Do you wish to update?",version_report, changes_txt)
+	; }
 
-		if DEBUG 
-			tooltip "wd: " a_workingdir "`nname: " this.installer_name "`n`n" a_workingdir "\" this.installer_name " has been found"
+	; update_now(){
+	; 	log('WARN:GENERIC_MISSING_ELEMENT_MSGBOX("Self Update Discontinuted")')
+	; 	Return
+	; 	/*
+	; 	; Download "https://raw.githubusercontent.com/sgmsm/CARKA/master/CARKA_Installer.exe", "CARKA_Installer.exe"	
+	; 	temp:=UITool.ProgressBar("Downloading . . .")
+	; 	download this.installer_url, a_workingdir "\" this.installer_name	
+	; 	if DEBUG
+	; 		tooltip "setting to 50% progress"
+	; 	temp.update(50)
+	; 	while !FileExist(a_workingdir "\" this.installer_name){
+	; 		sleep 500
+	; 	}	
 
-		;building run commands string into a single var for simplicity and debugging
-		run_str := '"' a_workingdir '\' this.installer_name '" ' 	;file to run followed by args
-		run_str .= DllCall("GetCurrentProcessId") " " 				;arg1 carka process id for killing
-		run_str .= this.current_version " " 						;arg2 curent var for backing up name
-		run_str .= round(this.last_known_remote_version,2) " " 		;arg3 remote version for showing what is downloading
-		run_str .= '"' A_ScriptFullPath '"'							;arg4 exact name to replace with new download
+	; 	if DEBUG 
+	; 		tooltip "wd: " a_workingdir "`nname: " this.installer_name "`n`n" a_workingdir "\" this.installer_name " has been found"
 
-		if DEBUG
-			msgbox run_str
+	; 	;building run commands string into a single var for simplicity and debugging
+	; 	run_str := '"' a_workingdir '\' this.installer_name '" ' 	;file to run followed by args
+	; 	run_str .= DllCall("GetCurrentProcessId") " " 				;arg1 carka process id for killing
+	; 	run_str .= this.current_version " " 						;arg2 curent var for backing up name
+	; 	run_str .= round(this.last_known_remote_version,2) " " 		;arg3 remote version for showing what is downloading
+	; 	run_str .= '"' A_ScriptFullPath '"'							;arg4 exact name to replace with new download
 
-		Run(run_str)
-		temp.Destroy()
-		;exits the app to allow for update to replace it
-		ExitApp "updating..."	
-		*/
-	}
+	; 	if DEBUG
+	; 		msgbox run_str
+
+	; 	Run(run_str)
+	; 	temp.Destroy()
+	; 	;exits the app to allow for update to replace it
+	; 	ExitApp "updating..."	
+	; 	*/
+	; }
 }
 
 class LicenseTool{
