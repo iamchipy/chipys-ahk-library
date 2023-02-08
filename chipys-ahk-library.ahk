@@ -772,7 +772,8 @@ class ThreeButtonMenu {
 }
 
 class ConfigEntry {
-	; data-structures/Objectsfor complex configuration entries allowing each entry to handle it's own save/load
+	; data-structures/Objects for complex configuration entries allowing each entry to handle it's own save/load
+	;
 	__new(key,c_section,fn,c_type:=0,accessories:=0,default_value:=0,delete_if_blank:=0,info:=''){
 		;value = base entry's value 
 		;section = ini section 
@@ -796,23 +797,25 @@ class ConfigEntry {
 
 		this.acc := accessories
 		this.has_toggle := 0		
-		if type(this.acc) = "array"	{						;check if it's an array
-			; MsgBox(this.acc[1] "`n is an array for " key)  
-			if this.type = "DropDownList" {					;if this entry is a list, the accessory is the data
-				loop this.acc.Length{							;loop for all items in the list
+		if type(this.acc) = "array"	{								;check if it's an array 
+			if this.type = "DropDownList" {						;if this entry is a list, the accessory is the data
+				loop this.acc.Length{								;loop for all items in the list
 					this.pipelist.push(this.acc[A_Index])			;adds item
 				}		
-			}else if this.acc[1] = "DropDownList" {
-				; MsgBox key " has an array `n" this.acc[2] "`n" this.acc[3]
-				loop this.acc.Length -1 {			;loop for all  remaining entries in array
-					this.pipelist.push(this.acc[A_Index+1])  ; adds item
+			}else if this.acc[1] = "DropDownList" {				;if this is a dropdownlist accessorry too
+				loop this.acc.Length -1 {							;loop for all  remaining entries in array
+					this.pipelist.push(this.acc[A_Index+1]) 		; adds item
 				}
-			}else{ 											;all other types get default system
-				loop this.acc.Length{							;loop for all accessories in array
-					if instr(this.acc[A_Index],"*") 			;check if this item has '*' mean it's a default for the previous item
+			}else{ 												;all other types get default system
+				loop this.acc.Length{								;loop for all accessories in array
+					if instr(this.acc[A_Index],"*") 				;check if this item has '*' mean it's a default for the previous item
 						this.has_%this.acc[A_Index-1]%_default := SubStr(this.acc[A_Index], 2 )
 					else
 						this.has_%this.acc[A_Index]% := 1
+					; additional check for settings always on
+					if instr(this.acc[A_Index],"1") and instr(this.acc[A_Index-1],"toggle") and (this.type = "hotkey"){
+						this.always := 1
+					}
 				}
 			}
 		}else if type(this.acc) = "string"{				;assumes it's to be used as is in list prop 
@@ -892,9 +895,9 @@ class ConfigManagerTool {
 		((client_name)?(this.client_name:=client_name):(MsgBox(custom_section " MISSING client name")))
 		this.gui_size_limit_height := 20
 
-		this.c := map()		;map of settings in dict/map form for easy of saving, loading, and recall
-		this.c2 := map()	;secondary map of settings in dict/map form for easy of saving, loading, and recall
-		this._protected_keys := []	;list of currently used keys
+		this.c := map()					;map of settings in dict/map form for easy of saving, loading, and recall
+		this.c2 := map()				;secondary map of settings in dict/map form for easy of saving, loading, and recall
+		this._protected_keys := []		;list of currently used keys
 		this.section_alt := this.section "_alt"
 
 		this.load_all()
@@ -1008,7 +1011,7 @@ class ConfigManagerTool {
 	}
 
 	gui_open(*){	
-
+		log("ALERT:SUSPENDING SCRIPT")
 		Suspend 1
 		try			;checks if gui object exists and closes incase double opening
 			this.gui.Destroy()
@@ -1087,8 +1090,7 @@ class ConfigManagerTool {
 				;title
 				this.gui.Add("text", "xm+" height_margin_increment " y" (height_margin_increment*row_y)+height_margin_modifier, strUpper(StrReplace(key, "_" , " ")))			
 
-				if DEBUG 
-					tooltip "gui_open`nkey: " string(key) "`nobj: " string(obj)
+				log("INFO:gui_open	||key: " string(key) "	||obj: " string(obj))
 
 				;help/discription buttons
 				this.gui.Addbutton("xp+" 8*height_margin_increment " vinfo" key,"?").onEvent("click", (gui_obj,*)=>this.info(gui_obj))
@@ -1105,8 +1107,7 @@ class ConfigManagerTool {
 						row_extra += 1
 					}
 					else{
-						if DEBUG
-							tooltip key "`n" obj.value "`n`n" obj.type
+						log("INFO:" key "	||" obj.value "	||" obj.type)
 						this.gui.Add(obj.type, "xp+" height_margin_increment " w" round(GUI_FONT_SIZE*10) " v" key, obj.value)			
 					}
 				}
@@ -1142,6 +1143,7 @@ class ConfigManagerTool {
 	}
 
 	gui_save(args*){
+		log("ALERT:RESUMING SCRIPT and saving variables")
 		Suspend 0
 		this.gui_data := this.gui.submit()					;dumps current state of GUI to an object
 		for key, value in this.gui_data.OwnProps(){			;enumerates the entire dict as an easy way of not missing anything
@@ -1153,16 +1155,18 @@ class ConfigManagerTool {
 			;case special cases in map "c2"
 			if this.c2.has(key){
 				this.c2[key].value := value 
-				disp("gui_save() skipping gui element: " key)
+				log("SPAM:gui_save() skipping gui element: " key)
 				Continue
 			}
 			
 			;hotkey unbind before assigning a new value to be bound
-			if this.c[key].type = "hotkey" {								;if this is a hotkey
-				if this.c[key].value != value or this.c[key].toggle != this.gui_data.%key%_toggle{
-					this._unbind(this.c[key].value)								;unbind previous value(key)
+			if this.c[key].type = "hotkey" {								    ;if this is a hotkey
+				log("INFO:Updating hotkey for '" key "' to '" value "'")
+				if (this.c[key].value != value) or (this.c[key].toggle != this.gui_data.%key%_toggle){
 					if value {													;if there is a new value from gui, bind it
 						this._bind(value, key, this.gui_data.%key%_toggle)			
+					}else {
+						this._unbind(this.c[key].value)								;unbind previous value(key)
 					}
 				}
 			}
@@ -1186,6 +1190,7 @@ class ConfigManagerTool {
 	}
 
 	gui_close(){
+		log("ALERT:RESUMING SCRIPT")
 		Suspend 0
 		this.gui.Destroy()
 	}
@@ -1228,9 +1233,10 @@ class ConfigManagerTool {
 	}
 
 	on_change(obj_of_event){
-		if this.does_conflict(obj_of_event.value){
-			if DEBUG
-				ToolTip obj_of_event.value " conflicts with "  this.does_conflict(obj_of_event.value)
+		conflict_result := this.does_conflict(obj_of_event.value)
+
+		if conflict_result{
+			log("WARN:" obj_of_event.value " conflicts with "  conflict_result)
 		}
 	}
 
@@ -1277,6 +1283,7 @@ class ConfigManagerTool {
 	}
 	
 	ini(key, delete_if_blank:=0, default_value:=0, ctr_type:="edit", info:='',accessories:=0){ ; stores data enties in C/C2 maps of this obj
+		; accessories for HotKeys needs to be "['toggle','*0']" to give always_on options with [ctype, defualt]
 		if ctr_type = "DropDownList"{
 			this.c2[key]:=ConfigEntry(	key,
 										this.section_alt,
@@ -1303,7 +1310,7 @@ class ConfigManagerTool {
 		if !FileExist(this.fn){
 			;if it doesn't
 			;leave a log
-			log("WARN: CfgMgr: Could not locate '" this.fn "' to load config data")
+			log("WARN:CfgMgr: Could not locate '" this.fn "' to load config data")
 			;exit load process
 			return
 		}
@@ -1321,7 +1328,7 @@ class ConfigManagerTool {
 				this.wrong_type_handler(pairs_array[1], pairs_array[2])
 				; stores the data in the "c" map
 				this.c[pairs_array[1]].value := pairs_array[2]
-				log("SPAM:Load_ALL(line:" l "		||" pairs_array[1] " +> " pairs_array[2] )
+				log("INFO:Load_ALL(line:" l "		||" pairs_array[1] " +> " pairs_array[2] )
 				try
 					if this.c[pairs_array[1]].type = "hotkey" {
 						log("SPAM:Auto-binding . . . ")
@@ -1332,7 +1339,13 @@ class ConfigManagerTool {
 		}catch OSError as e{
 			MsgBox "Unable to find file or section:  [" this.section "] in:`n" this.fn "`n`nYou might need to setup this section's settings"	
 		}catch any as e{
-			temp := CULErrorHandler(e,"Error loading settings from section[" this.section "] of " this.fn " (if this is the first time you are seeing this it should be safe to ignore this message)`n`n")
+			; this is to catch when file doesn't contain any valid sections
+			if e.Message = "The requested key, section or file was not found."{
+				log("WARN:CfgMgr: Unable to find requested section or key in ini file! Should only happen when INI is empty. Will rename to create new one.")
+				FileMove(this.fn, this.fn ".old" A_Now)
+				return
+			}
+			throw e
 		}
 	}
 
