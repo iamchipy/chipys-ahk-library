@@ -3287,23 +3287,6 @@ class CULErrorHandler {
 	}
 }
 
-class Movment {
-	__new(name:="current", differential_array:=""){
-		if type(differential_array) = "UE4Coord"
-			differential_array := differential_array.a()
-		if differential_array.Length != 5
-			throw {message:"Invalid differential_array", what:"Movment differential_array var not valid (should be UE4Coord)", extra:""}
-
-		this.dif_arr := differential_array
-	}
-
-	_build_action(){
-		; first figure yaw/pitch (way you are facing)
-
-
-	}
-}
-
 ; TODO to be moved out of CUL
 class UE4Coord {
 	__new(clipboard_str:= "0 0 0 0 0") {
@@ -3605,6 +3588,25 @@ class UE4CoordHandler{
 [][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][]
 */
 
+human_click(butt,x:=0,y:=0){
+	h:=random(-2,2)
+
+	if(type(butt)=="Array"){
+		x:=con.WIN_X+butt[1]
+		y:=con.WIN_Y+butt[2]
+		butt:= "left"
+	}	
+	if(type(butt)=="RichPixel"){
+		butt:= "left"
+		x:=con.WIN_X+butt.x
+		y:=con.WIN_Y+butt.y
+	}
+	Log("SPAM:HumanClick || " type(butt) "||	" x ":" y "	" butt)
+	MouseMove x, y
+	bst()		
+	MouseClick butt, x, y
+}
+
 client_to_screen(coords, win:=0){
 	if !win{
 		WinGetClientPos &X, &Y, &Width, &Height
@@ -3863,34 +3865,37 @@ coords_normalize_array(coords_array_in, baseline_res:=0, client_name:= "A"){
 	Return coords_array_out	
 }
 
-toggle_user_input_off(){
-	global
+toggle_user_input_off(block_timeout:=8000){
+	global blocking_user_input
+	log("WARN:User Input blocked!")
+	disp("#BlockingUserInputs",3,,0)
+	
+	SetTimer ()=>toggle_user_input_safty(), 0-block_timeout	;just to be safe about blocking out users
 	BlockInput True 
-	blocking_user_input:= False
-	disp("#UserInputRestored",3)	
+	blocking_user_input:= True
+		
 }
 
 toggle_user_input_on(){
-	if DEBUG 	; to make sure that in debug mode we don't have to deal with blocking
-		Return
-	BlockInput True
-	disp("#BlockingUserInputs",3,,0)
-	SetTimer ()=>toggle_user_input_safty(), -8000	;just to be safe about blocking out users
-	blocking_user_input:= True
+	log("WARN:User Input blocked!")
+	disp("#UserInputRestored",3)
+
+	BlockInput False
+	blocking_user_input:= False
 }
 
 toggle_user_input(){
-	global
+	global blocking_user_input
 	if blocking_user_input{
-		toggle_user_input_off()
-	}else{
 		toggle_user_input_on()
+	}else{
+		toggle_user_input_off()
 	}
 	blocking_user_input:=!blocking_user_input
 }
 
 toggle_user_input_safty(){
-	global
+	global blocking_user_input
 	if blocking_user_input{
 		BlockInput False
 		disp("#SAFTY-UserInputRestored",3,,120000)	
@@ -3921,30 +3926,6 @@ run_script_on_startup(mode:=""){
 		default:
 			return is_present
 	}
-}
-
-CUL_err_to_file(exception){
-    FileAppend(exception.Line . ": " . exception.Message, "errorlog.txt")
-    disp("Error . . .", 3)
-    return true
-}
-
-cleep(multiplier:=1, flat_added:=0){
-	sleep -1
-	;MsgBox "STATIC ref to Settings_OBJ"
-	; sleep (settings_obj.c["ping_comp"].value*multiplier)+flat_added
-	sleep (250*multiplier)+flat_added
-}
-
-ileep(multiplier:=1, flat_added:=0){
-	sleep -1
-	;MsgBox "STATIC ref to Settings_OBJ"
-	; sleep (settings_obj.c["input_delay"].value*multiplier)+flat_added
-	sleep (10*multiplier)+flat_added
-}
-
-GENERIC_MISSING_ELEMENT_MSGBOX(string){
-	MsgBox "Missing: " string "`n`rYou may need to reinstall"
 }
 
 hex_to_rgb(rgb_hex){
@@ -4285,6 +4266,8 @@ fancy_sleep(ms_to_sleep_for, halting_flag:=false){
 baseline_sleep_time(ms_to_sleep_for:=1, halting_flag:=false, base_delay_time:=100){
 	; function for quick sleep that allows "mutlitasking" with micro variation when imprecise sleep is acceptible
 	; accepts values smaller than base_delay_time as shorthand for multiple baseline periods ask bst(10)=sleep(1000+random)
+
+	sleep -1  ; first take a tiny sleep to make script interuptible/responsive
 	if ms_to_sleep_for < base_delay_time{
 		; shortcut case for multiples of base delay
 		sleep ms_to_sleep_for*Random(.9*base_delay_time,1.1*base_delay_time)
@@ -4301,9 +4284,26 @@ baseline_sleep_time(ms_to_sleep_for:=1, halting_flag:=false, base_delay_time:=10
 
 bst(ms_to_sleep_for:=1, &halting_flag:=false, base_delay_time:=100){
 	; alias for baseline_sleep_time(ms_to_sleep_for:=1, halting_flag:=false, base_delay_time:=100)
-	baseline_sleep_time(ms_to_sleep_for:=1, halting_flag:=false, base_delay_time:=100)
+	baseline_sleep_time(ms_to_sleep_for, halting_flag, base_delay_time)
 }
 
+cleep(multiplier:=1, flat_added:=0){
+	; converted to alias for baseline_sleep_time()
+	baseline_sleep_time(multiplier, , flat_added)
+	; sleep -1
+	; ;MsgBox "STATIC ref to Settings_OBJ"
+	; ; sleep (settings_obj.c["ping_comp"].value*multiplier)+flat_added
+	; sleep (250*multiplier)+flat_added
+}
+
+ileep(multiplier:=1, flat_added:=0){
+	; converted to alias for baseline_sleep_time()
+	baseline_sleep_time(multiplier, , flat_added)
+	; sleep -1
+	; ;MsgBox "STATIC ref to Settings_OBJ"
+	; ; sleep (settings_obj.c["input_delay"].value*multiplier)+flat_added
+	; sleep (10*multiplier)+flat_added
+}
 /*
 [][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][]
 [][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][]
@@ -4313,6 +4313,14 @@ bst(ms_to_sleep_for:=1, &halting_flag:=false, base_delay_time:=100){
 [][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][]
 [][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][]
 */
+CUL_err_to_file(exception){
+	;Now using log() functions
+	disp("Logging ERR . . .", 3)
+	log("CRIT:" exception.Line . ": " . exception.Message)
+	; FileAppend(exception.Line . ": " . exception.Message, "errorlog.txt")
+    ; disp("Error . . .", 3)
+    ; return true
+}
 
 clog(ErrClass, f:="SourceFunc") {
 	; this allows for simple logging of desired text
