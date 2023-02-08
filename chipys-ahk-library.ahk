@@ -919,7 +919,7 @@ class ConfigManagerTool {
 			if config_entry.type = "hotkey" {
 				this._bind(config_entry.value,config_entry.key)
 			}
-			msgbox "Hotkey for " config_entry.key " has been set to " config_entry.value
+			msgbox "Value of variable '" config_entry.key "' changed to '" config_entry.value "'"
 		}
 		
 	}
