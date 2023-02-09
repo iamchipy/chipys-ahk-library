@@ -1984,21 +1984,20 @@ class ScenarioDetector {
 
 	}
 
-	_refine_coords(refine_array:=0){ ;update offset/win(refine_array) & 'live' with prop[]ratios+offset
+	_refine_coords(xywh_info_array:=0){ ;update offset/win(refine_array) & 'live' with prop[]ratios+offset
 		if !WinExist(this.client_name){
-			disp(this.hrid " could not find ARK window")			;STATIC
+			disp("'" this.hrid "' could not find target window")
 			Return
 		}
 		; refine_array -> [[win-x,win-y],[win-w,win-h]]
-		if !refine_array{					;if we weren't info try get it from client window
+		if !xywh_info_array{					;if we weren't given info try get it from client window
 			WinGetClientPos &X, &Y, &Width, &Height, this.client_name	
-			refine_array := [[X,Y],[Width,height]]	
+			xywh_info_array := [[X,Y],[Width,height]]	
 		}
 
-		this.update_offset(refine_array[1])		;update the object's current offset prop (to be saved)
-		this.update_win(refine_array[2])		;update the object's current window dimentions prop (to be saved)
+		this.update_offset(xywh_info_array[1])			;update the object's current offset prop (to be saved)
+		this.update_win(xywh_info_array[2])				;update the object's current window dimentions prop (to be saved)
 
-		; MsgBox  this.prop["x1"] ":" this.prop["y1"] "`n" this.prop["x2"] ":" this.prop["y2"]
 		;new system (scaler for ark ui)
 		;converts client coords (sample) to client coords current res
 		temp_coords :=[this.prop["x1"],this.prop["y1"],this.prop["x2"],this.prop["y2"]]
@@ -2006,7 +2005,7 @@ class ScenarioDetector {
 			temp_coords :=[this.prop["x1"],this.prop["y1"],this.prop["x2"],this.prop["y2"],this.prop["ui_compensate"]]
 		normalized_array := coords_normalize_array(	temp_coords,
 													[this.prop["x_ref"],this.prop["y_ref"]],
-													refine_array[2])
+													xywh_info_array[2])
 		this.x1 := normalized_array[1] + this.prop["x_off"]
 		this.y1 := normalized_array[2] + this.prop["y_off"]
 		this.x2 := normalized_array[3] + this.prop["x_off"]
@@ -2345,7 +2344,6 @@ class ScenarioDetector {
 			this.tol := LocalTol
 			this.type := "image"
 			this.area_flag := 1
-
 
 			this.load()				;load info from ini file
 			this._refine_coords()	;take loaded info and translate into coords used for SCREEN based stuff
@@ -3824,83 +3822,89 @@ file_locate(pattern, search_in:="C:\",  filter:="", flags:="RF"){
 	; 	tooltip  search_in pattern " not found"
 }
 
-coords_normalize_pair(coord_pair, baseline_res:=0, client_name:= "A"){
 	;this tries to take an input coords sample along with it's given screen resolution and convert that into a new screen resolution's
 	;equivalent. It assumes that the UI you are targetting is always centered on screen and always maintains aspect ratio
-	ui_x_factor := .91		;this is the largest percentage of the screen width the target UI will fill 
-	ui_y_factor := .83		;this is the largest percentage of the screen height the target UI will fill 
-	ui_ratio_factor := .51 	;this is the aspect ratio of the target UI 
-	;not get current client info
+	; - coord_pair (Array of 2 or 4 Integers) Accepts 1 or 2 pairs of coordinates that need to be rescaled
+	; - baseline_res (Array of 2 Integers) Represents the X/y Width/Height of the sample
+	; - client_name (Array of 2 Integers // String window name) Accpets an array of target window's X/Y (W/H) size or name of target window
+coord_pair_rescale_for_new_res(coord_pair, baseline_res:=0, client_name:= "A"){
+
+	; discontinuing UI scaling for ARK(would need to move to it's own function)
+	; ui_x_factor := .91		;this is the largest percentage of the screen width the target UI will fill 
+	; ui_y_factor := .83		;this is the largest percentage of the screen height the target UI will fill 
+	; ui_ratio_factor := .51 	;this is the aspect ratio of the target UI 
+
+	;update current window info if needed 
 	if type(client_name) = "array" {
 		client_res := [client_name[1], client_name[2]]
 	}else{
-		WinGetClientPos ,, &win_w, &win_h, client_name		;call info up about ark windo
+		WinGetClientPos ,, &win_w, &win_h, client_name			;call info up about ark windo
 		client_res := [win_w, win_h]							;load that into the client res		
 	}
-	;set baseline defaults  (TAKEN OUT/  'or type(baseline) != "array"')
-	if !baseline_res {	;if no screen res is provided
+
+	;set baseline defaults
+	if !baseline_res {								;if no screen res is provided
 		baseline_res:=[1920,1080]					;sets the base res value to 1080p 
-		if LOG_LEVEL  && !baseline_res  ;took out (&& type(baseline) != "array") since it's not used
-			tooltip "a coords pair is not of ARRAY type"
+		log("DEBUG: coord_pair_rescale_for_new_res() is using [1920,1080] default!	||")
 	}
 
-	;handles items that do not need ui_compensate
-	if coord_pair.Length > 2 and coord_pair[3]{
-		; ToolTip( "static scaling  " round(client_res[1]*(coord_pair[1]/baseline_res[1])) ":" round(client_res[2]*(coord_pair[2]/baseline_res[2])) , 100, 200, 2)
+	; apply rescaling math and return
+	if coord_pair.Length = 2{
 		Return [round(client_res[1]*(coord_pair[1]/baseline_res[1])),
 				round(client_res[2]*(coord_pair[2]/baseline_res[2]))]
 	}
-	if coord_pair.Length > 4 and coord_pair[5]{
-		; disp( "static scaling  " round(client_res[1]*(coord_pair[1]/baseline_res[1])) ":" round(client_res[2]*(coord_pair[2]/baseline_res[2])) , 100, 200, 2)
+	if coord_pair.Length = 4{
 		Return [round(client_res[1]*(coord_pair[1]/baseline_res[1])),
 				round(client_res[2]*(coord_pair[2]/baseline_res[2])),
 				round(client_res[3]*(coord_pair[3]/baseline_res[3])),
 				round(client_res[4]*(coord_pair[4]/baseline_res[4]))]
 	}	
 
-	;calc ui box for baseline res 
-	ui_x := baseline_res[1]				;sets starting ui size to screen
-	ui_x_max := round(baseline_res[1]*ui_x_factor) 	;sample screen size reduced to be the max ui size in that line
-	ui_y_max := round(baseline_res[2]*ui_y_factor) 	;sample screen size reduced to be the max ui size in that line
-	while ui_x > ui_x_max or ui_y > ui_y_max{       ;loops until ui size is within margins
-		ui_x -= round(baseline_res[1]*.005)			;using 0.5% of screen x as increment
-		ui_y := round(ui_x*ui_ratio_factor)
-	}
-	;calc ui box coords from coord_pair
-	ui_x_margin := round((baseline_res[1]-ui_x)/2) 		;give an offset coord of ui top left corner in pixels from client origin
-	ui_y_margin := round((baseline_res[2]-ui_y)/2)		;give an offset coord of ui top left corner in pixels from client origin
+	; discontinuing UI scaling for ARK(would need to move to it's own function)
+	; ;calc ui box for baseline res 
+	; ui_x := baseline_res[1]				;sets starting ui size to screen
+	; ui_x_max := round(baseline_res[1]*ui_x_factor) 	;sample screen size reduced to be the max ui size in that line
+	; ui_y_max := round(baseline_res[2]*ui_y_factor) 	;sample screen size reduced to be the max ui size in that line
+	; while ui_x > ui_x_max or ui_y > ui_y_max{       ;loops until ui size is within margins
+	; 	ui_x -= round(baseline_res[1]*.005)			;using 0.5% of screen x as increment
+	; 	ui_y := round(ui_x*ui_ratio_factor)
+	; }
+	; ;calc ui box coords from coord_pair
+	; ui_x_margin := round((baseline_res[1]-ui_x)/2) 		;give an offset coord of ui top left corner in pixels from client origin
+	; ui_y_margin := round((baseline_res[2]-ui_y)/2)		;give an offset coord of ui top left corner in pixels from client origin
 
-	;this is the useful part
-	coords_x_percent_of_ui := (coord_pair[1]-ui_x_margin)/ui_x	;the coords within ui box (in % form)
-	coords_y_percent_of_ui := (coord_pair[2]-ui_y_margin)/ui_y	;the coords within ui box (in % form)
+	; ;this is the useful part
+	; coords_x_percent_of_ui := (coord_pair[1]-ui_x_margin)/ui_x	;the coords within ui box (in % form)
+	; coords_y_percent_of_ui := (coord_pair[2]-ui_y_margin)/ui_y	;the coords within ui box (in % form)
 
-	;calc ui box for CURRENT res 
-	ui_x := client_res[1]				;sets starting ui size to screen
-	ui_x_max := round(client_res[1]*ui_x_factor) 	;sample screen size reduced to be the max ui size in that line
-	ui_y_max := round(client_res[2]*ui_y_factor) 	;sample screen size reduced to be the max ui size in that line
-	while ui_x > ui_x_max or ui_y > ui_y_max{       ;loops until ui size is within margins
-		ui_x -= client_res[1]*.005				;using 0.5% of screen x as increment
-		ui_y := round(ui_x*ui_ratio_factor)
-	}
-	;calc ui box coords from coord_pair
-	ui_x_margin := round((client_res[1]-ui_x)/2) 		;give an offset coord of ui top left corner in pixels from client origin
-	ui_y_margin := round((client_res[2]-ui_y)/2)		;give an offset coord of ui top left corner in pixels from client origin
-	;now convert sample ui% based coords into current ui pixel coords and add the margin values back in for current res 
-	out_x := ui_x_margin + (ui_x*coords_x_percent_of_ui)
-	out_y := ui_y_margin + (ui_y*coords_y_percent_of_ui)
+	; ;calc ui box for CURRENT res 
+	; ui_x := client_res[1]				;sets starting ui size to screen
+	; ui_x_max := round(client_res[1]*ui_x_factor) 	;sample screen size reduced to be the max ui size in that line
+	; ui_y_max := round(client_res[2]*ui_y_factor) 	;sample screen size reduced to be the max ui size in that line
+	; while ui_x > ui_x_max or ui_y > ui_y_max{       ;loops until ui size is within margins
+	; 	ui_x -= client_res[1]*.005				;using 0.5% of screen x as increment
+	; 	ui_y := round(ui_x*ui_ratio_factor)
+	; }
+	; ;calc ui box coords from coord_pair
+	; ui_x_margin := round((client_res[1]-ui_x)/2) 		;give an offset coord of ui top left corner in pixels from client origin
+	; ui_y_margin := round((client_res[2]-ui_y)/2)		;give an offset coord of ui top left corner in pixels from client origin
+	; ;now convert sample ui% based coords into current ui pixel coords and add the margin values back in for current res 
+	; out_x := ui_x_margin + (ui_x*coords_x_percent_of_ui)
+	; out_y := ui_y_margin + (ui_y*coords_y_percent_of_ui)
 
-	;still returning client based coords (mode)
-	Return [round(out_x), round(out_y)]
+	; ;still returning client based coords (mode)
+	; Return [round(out_x), round(out_y)]
 }
 
 coords_normalize_array(coords_array_in, baseline_res:=0, client_name:= "A"){
+	; version for single coord pair and double coord pair (pixel vs area)
 	if coords_array_in.Length = 5{
 		disp(" ui comp version [" coords_array_in[3] ":" coords_array_in[4] "," coords_array_in[5] "]`n" baseline_res[2] "`n" client_name[2])
-		temp1 := coords_normalize_pair([  coords_array_in[1],coords_array_in[2],coords_array_in[5]  ],baseline_res,client_name)
-		temp2 := coords_normalize_pair([coords_array_in[3],coords_array_in[4],coords_array_in[5]],baseline_res,client_name)
+		temp1 := coord_pair_rescale_for_new_res([coords_array_in[1],coords_array_in[2],coords_array_in[5]],baseline_res,client_name)
+		temp2 := coord_pair_rescale_for_new_res([coords_array_in[3],coords_array_in[4],coords_array_in[5]],baseline_res,client_name)
 	}else{
-		temp1 := coords_normalize_pair([coords_array_in[1],coords_array_in[2]],baseline_res,client_name)
-		temp2 := coords_normalize_pair([coords_array_in[3],coords_array_in[4]],baseline_res,client_name)
+		temp1 := coord_pair_rescale_for_new_res([coords_array_in[1],coords_array_in[2]],baseline_res,client_name)
+		temp2 := coord_pair_rescale_for_new_res([coords_array_in[3],coords_array_in[4]],baseline_res,client_name)
 	}
 	coords_array_out := [temp1[1],temp1[2],temp2[1],temp2[2]]
 	Return coords_array_out	
