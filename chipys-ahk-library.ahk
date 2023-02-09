@@ -1551,7 +1551,7 @@ class Tool {
 		}	
 
 		_screen_to_client(coords){	;take current screen/window info and converts to client coodemode from screen
-			WinGetClientPos &X, &Y, &Width, &Height, "A"	;use active window, assuming it's the right one
+			WinGetClientPos( &X, &Y, &Width, &Height, "A")	;use active window, assuming it's the right one
 			this.x := x
 			this.y := y
 			this.w := width
@@ -1564,7 +1564,7 @@ class Tool {
 			if coords.length == 2 	;returns if only 2 coords are needed
 				Return			    
 		    this.cx2 := coords[3]-x 	;fill prop info from results for partent caller to use
-		    this.cy2 := coords[4]-y	;fill prop info from results for partent caller to use   
+		    this.cy2 := coords[4]-y		;fill prop info from results for partent caller to use   
 		}
 
 		class Pixel extends Tool.Mouse {
@@ -1591,7 +1591,8 @@ class Tool {
 			}
 		}
 
-		class Area extends Tool.Mouse {
+		;Class extention that allows for click-drag of an area, highlighting it and returning info
+		class DragHighlight extends Tool.Mouse {
 			__new(target_window){
 				this._capture_next("LButton",(*)=>this.drag())
 				WinActivate target_window						;set client window (what ever app you are wroking in active)
@@ -1600,7 +1601,7 @@ class Tool {
 
 			drag(){
 				;displays and records info about the area "drug" on screen
-			    MouseGetPos &x1, &y1 	;get starting click
+			    MouseGetPos(&x1, &y1 )					;get starting click
 			    this.display_obj := tool.highlight("dragzone", [x1, y1 ,x1+2, y1+2 ],"EEEEEE",0)
 
 			    try{
@@ -1615,13 +1616,13 @@ class Tool {
 				    this._screen_to_prop([x1,y1,x2,y2])
 				    this._screen_to_client([x1,y1,x2,y2])
 			    }catch any as e {
-				    this.display_obj.hide()		;hide the live display so the confirm SHOW_COORDS can take over
+				    this.display_obj.hide()				;hide the live display so the confirm SHOW_COORDS can take over
 				    Hotkey("Lbutton", (*)=> this.drag(), "off")
 			    	return false
 			    }	
-			    this.done := 1	;confirm that the process has finished
+			    this.done := 1							;confirm that the process has finished
 
-			    this.display_obj.hide()		;hide the live display so the confirm SHOW_COORDS can take over
+			    this.display_obj.hide()					;hide the live display so the confirm SHOW_COORDS can take over
 			    Hotkey("Lbutton", (*)=> this.drag(), "off")
 			}
 		}
@@ -1930,20 +1931,18 @@ class ScenarioDetector {
 		;define variables that will get saved or need defaults
 		this.coord_mode_to_use := "Screen"
 		this.prop := Map()							;all saved properties are now in this map for easy of saving
-		this.prop["x_ref"] := 1920					;resolution client at time of search-area setup
-		this.prop["y_ref"] := 1080 					;resolution client at time of search-area setup
-		this.prop["x_win"] := A_ScreenWidth			;width of client (default assumes fullscreen)
-		this.prop["y_win"] := A_ScreenHeight 		;hieght of client (default assumes fullscreen)		
-		this.prop["x_off"] := 0					;coordinate representing the origin of the client window (offset + coord should = screen pixel)
-		this.prop["y_off"] := 0					;coordinate representing the origin of the client window (offset + coord should = screen pixel)
+		this.prop["sample_window_width"] := 1920					;resolution client at time of search-area setup
+		this.prop["sample_window_height"] := 1080 					;resolution client at time of search-area setup	
+		this.prop["sample_window_x"] := 0					;coordinate representing the origin of the client window (offset + coord should = screen pixel)
+		this.prop["sample_window_y"] := 0					;coordinate representing the origin of the client window (offset + coord should = screen pixel)
 		;discontinued this.prop["ui_compensate"] := false 		;for telling if this pixel should have it's coord adjusted accounting to ui scaler
 
-		this.prop["x"] := 0		;x of (last) found location of scenario
-		this.prop["y"] := 0		;y of (last) found location of scenario
-		this.prop["x1"] := 0	;x of first (upper left) coord for area to search [based on client coordmode]
-		this.prop["y1"] := 0	;y of first (upper left) coord for area to search [based on client coordmode]
-		this.prop["x2"] := 0 	;x of second (lower right) coord for area to search [based on client coordmode]
-		this.prop["y2"] := 0	;x of second (lower right) coord for area to search [based on client coordmode]
+		this.prop["last_seen_x"] := 0		;x of (last) found location of scenario
+		this.prop["last_seen_y"] := 0		;y of (last) found location of scenario
+		this.prop["search_x1"] := 0	;x of first (upper left) coord for area to search [based on client coordmode]
+		this.prop["search_y1"] := 0	;y of first (upper left) coord for area to search [based on client coordmode]
+		this.prop["search_x2"] := 0 	;x of second (lower right) coord for area to search [based on client coordmode]
+		this.prop["search_y2"] := 0	;x of second (lower right) coord for area to search [based on client coordmode]
 
 		;live properties used for manipulation and based on SCREEN for gui/hud accuracy
 		this.x := 0		;x of (last) found location of scenario
@@ -1952,6 +1951,8 @@ class ScenarioDetector {
 		this.y1 := 0	;y of first (upper left) coord for area to search [based on SCREEN coordmode]
 		this.x2 := 0 	;x of second (lower right) coord for area to search [based on SCREEN coordmode]
 		this.y2 := 0	;x of second (lower right) coord for area to search [based on SCREEN coordmode]		
+		this.target_window_width := A_ScreenWidth							;width of client (default assumes fullscreen)
+		this.target_window_height := A_ScreenHeight 						;hieght of client (default assumes fullscreen)			
 
 		;define blank variable that might be used by class or child classes 
 		this.color_mark := "00FF00"
@@ -1984,36 +1985,50 @@ class ScenarioDetector {
 
 	}
 
-	_refine_coords(xywh_info_array:=0){ ;update offset/win(refine_array) & 'live' with prop[]ratios+offset
+	; Method to update search area/space with new window-origin info (AKA converting ClientMode coords to ScreenMode coords)
+	; - new_search_area_array (Array) Requires 4x Int values x1,y,x2,y2 forming the box of the search area to be modified
+	; - xy_origin_array (Array) Accepts a 2x Int array representing the X&Y coords to use as target_window_origin (AKA offset)
+	_update_search_area(new_search_area_array, xy_origin_array:=0){
+		if xy_origin_array
+			this.update_offset(xy_origin_array)
+		this.x1 := new_search_area_array[1] + this.prop["sample_window_x"]
+		this.y1 := new_search_area_array[2] + this.prop["sample_window_y"]
+		this.x2 := new_search_area_array[3] + this.prop["sample_window_x"]
+		this.y2 := new_search_area_array[4] + this.prop["sample_window_y"]	
+	}
+
+	; Method used to update this Object Instance's info about the target window (either live-pulling the info or via input)
+	; - xywh_info_array (Array) Accepts array of 4x Int representing window info x,y,w,h
+	_update_target_window_info(xywh_info_array:=0){
 		if !WinExist(this.client_name){
 			disp("'" this.hrid "' could not find target window")
 			Return
 		}
-		; refine_array -> [[win-x,win-y],[win-w,win-h]]
+		; xywh_info_array -> [[win-x,win-y],[win-w,win-h]]
 		if !xywh_info_array{					;if we weren't given info try get it from client window
 			WinGetClientPos &X, &Y, &Width, &Height, this.client_name	
-			xywh_info_array := [[X,Y],[Width,height]]	
+			xywh_info_array := [X,Y,Width,height]	
 		}
+		
+		this.update_offset([xywh_info_array[1],xywh_info_array[2]])			;update the object's current offset prop (to be saved)
+		this.update_win([xywh_info_array[3],xywh_info_array[4]])				;update the object's current window dimentions prop (to be saved)
+	}
 
-		this.update_offset(xywh_info_array[1])			;update the object's current offset prop (to be saved)
-		this.update_win(xywh_info_array[2])				;update the object's current window dimentions prop (to be saved)
-
+	; Method to t?
+	_refine_coords(){ ;update offset/win(xywh_info_array) & 'live' with prop[]ratios+offset
+		
 		;converts client coords (sample) to client coords current res
-		temp_coords :=[this.prop["x1"],this.prop["y1"],this.prop["x2"],this.prop["y2"]]
-		normalized_array := coord_pair_rescale_for_new_res(	temp_coords,
-															[this.prop["x_ref"],this.prop["y_ref"]],
-															xywh_info_array[2])
-		this.x1 := normalized_array[1] + this.prop["x_off"]
-		this.y1 := normalized_array[2] + this.prop["y_off"]
-		this.x2 := normalized_array[3] + this.prop["x_off"]
-		this.y2 := normalized_array[4] + this.prop["y_off"]	
+		temp_coords :=[this.prop["search_x1"],this.prop["search_y1"],this.prop["search_x2"],this.prop["search_y2"]]
+		recaled_search_area := coord_pair_rescale_for_new_res(	temp_coords,
+																[this.prop["sample_window_width"],this.prop["sample_window_height"]])
+		this._update_search_area(recaled_search_area, xy_origin_array:=0) 
 	}
 
 	_client_to_screen(coord_pair){
 		if coord_pair.Length == 2
-			Return [coord_pair[1]+this.prop["x_off"],coord_pair[2]+this.prop["y_off"]] 
+			Return [coord_pair[1]+this.prop["sample_window_x"],coord_pair[2]+this.prop["sample_window_y"]] 
 		if coord_pair.Length == 4
-			Return [coord_pair[1]+this.prop["x_off"],coord_pair[2]+this.prop["y_off"],coord_pair[3]+this.prop["x_off"],coord_pair[4]+this.prop["y_off"]] 			
+			Return [coord_pair[1]+this.prop["sample_window_x"],coord_pair[2]+this.prop["sample_window_y"],coord_pair[3]+this.prop["sample_window_x"],coord_pair[4]+this.prop["sample_window_y"]] 			
 	}
 
 	_wipe(){
@@ -2023,9 +2038,8 @@ class ScenarioDetector {
 	}
 
 	_save_prop(prop_name){
+		log("DEBUG:ScenarioDetector:_save_prop(" prop_name ") for id '" this.id "' value[" this.prop[prop_name] "]")
 		IniWrite(this.prop[prop_name], CFG_PATH, this.id, prop_name)
-		; if DEBUG 
-		; 	ToolTip "ScenarioDetector " this.type " saving " this.%prop_name% " to:`n" A_WorkingDir "/" INI_FILE_NAME
 	}
 
 	_load_prop(prop_name){
@@ -2042,18 +2056,16 @@ class ScenarioDetector {
 
 	;Method to load any/all data in the section matching this.id should it exist
 	_load_ini_section(){
-		try
+		try{
 			ini_section := iniread(CFG_PATH, this.id)
-		catch
-			return	; if this fails we don't really care more than it failed so just exit
-		
-		loop ini_section.length {
-			line:= StrSplit(ini_section[A_Index], "=")
-			key:=line[1]
-			val:=line[2]
-
-			log("SPAM:_load_prop('" this.hrid "')	|" val "| of type " type(val) " into '" key "'")
-			this.prop[key] := val
+			loop ini_section.length {
+				line:= StrSplit(ini_section[A_Index], "=")
+				key:=line[1]
+				val:=line[2]
+	
+				log("SPAM:_load_prop('" this.hrid "')	|" val "| of type " type(val) " into '" key "'")
+				this.prop[key] := val
+			}
 		}
 	}
 
@@ -2061,27 +2073,28 @@ class ScenarioDetector {
 		if live_mode			;not the case by default only an option for specifically shows what is live with direct call by
 		    this.last_coords := this.is_present() 	;forcing it to run, is present check first to fill the data of current screen 
 
-		if this.type == "pixel" or this.last_coords{				;if visible show crosshair or if pixel show where should be
-			send_coords := [this.x, this.y]
-			send_color := this.prop["color_target"]			
-		}else if this.type == "image" or this.type == "pixel_ext" { ;show area searched 
-			send_coords := [this.x1, this.y1, this.x2, this.y2]
-			send_color := this.color_mark			
+		; if we are searching a single pixel or have last_seen data, we show that
+		if this.type == "pixel" or this.last_coords{				
+			display_coords := [this.x, this.y]
+			display_color := this.prop["color_target"]			
+		}else if this.type == "image" or this.type == "pixel_ext" { ; else if we are searching an area for either a pixel or image show that zone
+			display_coords := [this.x1, this.y1, this.x2, this.y2]
+			display_color := this.color_mark			
 		}else if this.type == "cluster" {  							;if type is cluster we gotta feed it subpixel1's coords for search area
-			send_coords := [this.sub_pixel[1].x1, this.sub_pixel[1].y1, this.sub_pixel[1].x2, this.sub_pixel[1].y2]
-			send_color := this.color_mark		
+			display_coords := [this.sub_pixel[1].x1, this.sub_pixel[1].y1, this.sub_pixel[1].x2, this.sub_pixel[1].y2]
+			display_color := this.color_mark		
 		}
 
 		;log
 		coord_str := ""
-		loop send_coords.Length
-			coord_str .= send_coords[A_Index] " "
+		loop display_coords.Length
+			coord_str .= display_coords[A_Index] " "
 		log( "DEBUG:show_coords: '" this.hrid "' LastSeen:		" this.x ":" this.y "		||in: " this.client_name "  ||area:" coord_str)
 
 		;now make highlight with above 'dynamic' flexie vars
 		this.hud_obj := tool.highlight(	this.id, 
-											send_coords, 
-											send_color, 
+											display_coords, 
+											display_color, 
 											length_to_show,
 											this.tile_flag)
 		this.hud_obj.show()		
@@ -2096,7 +2109,8 @@ class ScenarioDetector {
 			variation := this.tol
 
 		; if refine_array  ;refine_array if you want to make changes -> [[win-x,win-y],[win-w,win-h]]
-			this._refine_coords(refine_array)
+		this._update_target_window_info(refine_array)
+		this._refine_coords()
 
 		if this.type = "image" {	
 			this.last_coords := find_image(this.file_name,
@@ -2157,12 +2171,12 @@ class ScenarioDetector {
 				if this.sub_pixel[i].is_present(){											;if current pixel is present
 					this.sub_pixel[i].show_coords()											; show it's location
 					if this.mode == 1
-						this.sub_pixel[i+1].update_coords(	[this.sub_pixel[1].x-this.range,	; update the search area for next pixel (mode=1)
+						this.sub_pixel[i+1].update_search_coords(	[this.sub_pixel[1].x-this.range,	; update the search area for next pixel (mode=1)
 															 this.sub_pixel[1].y-this.range,
 															 this.sub_pixel[1].y+this.range,
 															 this.sub_pixel[1].y+this.range])
 					if this.mode == 2
-						this.sub_pixel[i+1].update_coords(	[this.sub_pixel[i].x-this.range,	; update the search area for next pixel (mode=2)
+						this.sub_pixel[i+1].update_search_coords(	[this.sub_pixel[i].x-this.range,	; update the search area for next pixel (mode=2)
 															 this.sub_pixel[i].y-this.range,
 															 this.sub_pixel[i].y+this.range,
 															 this.sub_pixel[i].y+this.range])
@@ -2184,19 +2198,20 @@ class ScenarioDetector {
 	save(){
 		this._save_prop("color_target")
 
-		this._save_prop("x")
-		this._save_prop("y")
-		this._save_prop("x1")
-		this._save_prop("y1")
-		this._save_prop("x2")
-		this._save_prop("y2")	
+		this._save_prop("last_seen_x")
+		this._save_prop("last_seen_y")
+		this._save_prop("search_x1")
+		this._save_prop("search_y1")
+		this._save_prop("search_x2")
+		this._save_prop("search_y2")	
 
-		this._save_prop("x_ref")
-		this._save_prop("y_ref")
-		this._save_prop("x_win")
-		this._save_prop("y_win")
-		this._save_prop("x_off")
-		this._save_prop("y_off")	
+		this._save_prop("sample_window_x")
+		this._save_prop("sample_window_y")	
+		this._save_prop("sample_window_width")
+		this._save_prop("sample_window_height")
+		; this._save_prop("target_window_width")
+		; this._save_prop("target_window_height")
+
 	}	
 
 	; method to try read-in/load any saved data matching this instance from the ini
@@ -2205,6 +2220,8 @@ class ScenarioDetector {
 		log("DEBUG:ScenarioDetector.*.Load(): hrid='" this.hrid "'" ) 
 		;Load any data that might exist in ini
 		this._load_ini_section()
+
+		;TODO improve/recode how we validate loaded data and decide to redefine/pick scene
 
 		; try load required data starting with most basic structure and advance
 		try{	
@@ -2215,21 +2232,21 @@ class ScenarioDetector {
 			}
 
 			;if have info for secondary coord (aka part of area) then we must be good
-			if this.prop["x2"]	 	
+			if this.prop["search_x2"]	 	
 				Return
 
 			;if have info for pixel's coord then we are good
-			if this.prop["x"] and this.type == "pixel"
+			if this.prop["last_seen_x"] and this.type == "pixel"
 				Return		
 			
 			; if we are still here we need to look as additional types:
-			this._load_prop("x1")			;load x1 -used in pixel/ext/img
-			this._load_prop("y1")			;load y1 -used in pixel/ext/img
+			this._load_prop("search_x1")			;load x1 -used in pixel/ext/img
+			this._load_prop("search_y1")			;load y1 -used in pixel/ext/img
 
 			;if this.area_flag we know it's ext/img only
 			if this.area_flag{				
-				this._load_prop("x2")		;load x2 -used in ext/img to define zone end
-				this._load_prop("y2")		;load y2 -used in ext/img to define zone end
+				this._load_prop("search_x2")		;load x2 -used in ext/img to define zone end
+				this._load_prop("search_y2")		;load y2 -used in ext/img to define zone end
 			}
 
 			;for pix.ext we are interested in loading last seen
@@ -2247,7 +2264,7 @@ class ScenarioDetector {
 					this.picker("pixel")
 				}
 				; if we are running an area type
-				if this.area_flag {  ;removed   and !this.prop["x2"]
+				if this.area_flag {  ;removed   and !this.prop["search_x2"]
 					disp("Please drag-select an area to search for '" this.hrid "' now.",,,0)
 					this.picker("area")
 				}
@@ -2261,30 +2278,32 @@ class ScenarioDetector {
 		this.save()
 	}
 
-	update_coords(coords:=0){		;used to update the search range of this(instance) manually (or [prop+offset]->live)
+	;Method to refresh/updaate current coords (can be run without params to recalculate search-area considering window origin offset)
+	; - coords (Array) Expects array of 2/4x Int to update search coords
+	update_search_coords(coords:=0){		
 		if !coords{
-			this.x1 := this.prop["x1"] + this.prop["x_off"]
-			this.y1 := this.prop["y1"] + this.prop["y_off"]
-			this.x2 := this.prop["x2"] + this.prop["x_off"]
-			this.y2 := this.prop["y2"] + this.prop["y_off"]
+			this.x1 := this.prop["search_x1"] + this.prop["sample_window_x"]
+			this.y1 := this.prop["search_y1"] + this.prop["sample_window_y"]
+			this.x2 := this.prop["search_x2"] + this.prop["sample_window_x"]
+			this.y2 := this.prop["search_y2"] + this.prop["sample_window_y"]
 			Return
 		}
-		this.prop["x1"] := coords[1]
-		this.prop["y1"] := coords[2]
+		this.prop["search_x1"] := coords[1]
+		this.prop["search_y1"] := coords[2]
 		if coords.Length < 4
 			Return
-		this.prop["x2"] := coords[3]
-		this.prop["y2"] := coords[4]
+		this.prop["search_x2"] := coords[3]
+		this.prop["search_y2"] := coords[4]
 	}
 
 	update_offset(coords){ 		;used to update the offset/origin of client window
-		this.prop["x_off"] := coords[1]
-		this.prop["y_off"] := coords[2]
+		this.prop["sample_window_x"] := coords[1]
+		this.prop["sample_window_y"] := coords[2]
 	}
 
 	update_win(dimentions){		;used to update client window dimentions 
-		this.prop["x_win"] := dimentions[1]
-		this.prop["y_win"] := dimentions[2]
+		this.target_window_width := dimentions[1]
+		this.target_window_height := dimentions[2]
 	}
 
 	get_age_in_ms(){
@@ -2293,9 +2312,6 @@ class ScenarioDetector {
 	}
 
 	picker(mode:="pixel"){	
-		; try;NO idea what this was
-			; temp := Man(this.hrid)  
-
 		if mode == "pixel"{
 			this._grab_pixel_info()
 		}
@@ -2305,17 +2321,20 @@ class ScenarioDetector {
 	}
 
 	_grab_area_info(){
-		temp := tool.mouse.area(this.client_name) 	
-		while !temp.done
+		area := tool.mouse.DragHighlight(this.client_name) 	
+		; wait for drag to complete
+		while !area.done
 			sleep 100
-		this.update_coords([temp.cx1,temp.cy1,temp.cx2,temp.cy2]) ;copy results into props (client mode)
-		this.prop["x_ref"] := temp.w 		;copy in the results from screen drag 	window info
-		this.prop["y_ref"] := temp.h 		;copy in the results from screen drag 	window info
+		
+		this.update_search_coords([area.cx1,area.cy1,area.cx2,area.cy2]) ;copy results into props (client mode)
+		this.prop["sample_window_width"] := area.w 		;copy in the results from screen drag 	window info
+		this.prop["sample_window_height"] := area.h 		;copy in the results from screen drag 	window info
 
-		this._refine_coords([[temp.x,temp.y],[temp.w,temp.h]])	;feed getclientpos stuff from temp so we don't do it twice
+		this._update_target_window_info([area.x,area.y,area.w,area.h])
+		this._refine_coords()	;feed getclientpos stuff from temp so we don't do it twice
 
 		disp("Search area ('" this.hrid "') defined")
-		log("INFO: Area for '" this.hrid "' selected: 		" temp.x ":" temp.y "	" temp.w ":" temp.h)
+		log("INFO: Area for '" this.hrid "' selected: 		" area.x ":" area.y "	" area.w ":" area.h)
 		this.show_coords()
 		this.save_all()
 	}
@@ -2324,8 +2343,8 @@ class ScenarioDetector {
 		temp := tool.mouse.pixel(this.client_name)
 		while !temp.done
 			sleep 100
-		this.prop["x"] := temp.x1
-		this.prop["y"] := temp.y1
+		this.prop["last_seen_x"] := temp.x1
+		this.prop["last_seen_y"] := temp.y1
 		this.prop["color_target"] := temp.color
 
 		disp("'" this.hrid "' pixel selected")
@@ -2334,15 +2353,20 @@ class ScenarioDetector {
 	}
 
 	class Img extends ScenarioDetector{
-		__New(file_name, coords:=0, LocalTol:=50, client_name:=0) {
-			;handles defaults
-			if type(coords) == "String"
-				coords := this._translate_zone(coords)
-			if type(coords) == "Array"{
-				this.prop["x1"] := coords[1]
-				this.prop["y1"] := coords[2]
-				this.prop["x2"] := coords[3]
-				this.prop["y2"] := coords[4]
+		; IMG Class allowing for a picture to be found
+		; - file_name (String) Filename or full path of the sample with black as transparent 
+		; - search_area (Array) Area can be double-pair coords or area-preset-name String
+		; - variation (Integer) Value 0-254 of how much of a variation from the sample is considered a match
+		; - client_name (String) Target window title/name (AHK_exe recommended)
+		__New(file_name, search_area:=0, variation:=50, client_name:=0) {
+			
+			if type(search_area) == "String"
+				search_area := this._translate_zone(search_area)
+			if type(search_area) == "Array"{
+				this.prop["search_x1"] := search_area[1]
+				this.prop["search_y1"] := search_area[2]
+				this.prop["search_x2"] := search_area[3]
+				this.prop["search_y2"] := search_area[4]
 			}	
 
 			if client_name{
@@ -2352,14 +2376,17 @@ class ScenarioDetector {
 			}
 
 			this.file_name := file_name
-			this.id := StrSplit(file_name , ".")[1]
-			this.hrid := this.id
-			this.tol := LocalTol
+			this.id := this.hrid := StrSplit(file_name , ".")[1]
+			this.tol := variation
 			this.type := "image"
-			this.area_flag := 1
+			this.area_flag := 1  	;used by parent structure to know if class is doing area functions
+			
+			; now we load in and saved data and if there is none we prompt user for definition
+			this.load()
 
-			this.load()				;load info from ini file
-			this._refine_coords()	;take loaded info and translate into coords used for SCREEN based stuff
+			;take loaded info and translate into coords used for SCREEN based stuff
+			this._update_target_window_info()
+			this._refine_coords()	
 
 			; try{
 				; TODO remove IMFV and use GUI creation https://www.autohotkey.com/boards/viewtopic.php?f=6&t=3806
@@ -2372,8 +2399,8 @@ class ScenarioDetector {
 				this.dimentions := this.imagetool.get_image_size(this.file_name)	;gets the x and y size of the image for scaling 
 
 				this.scale := this.imagetool.rescaler( 	this.dimentions,	; rescale(img_dimentions, ref_dimentions, win_dimentions)
-														[this.prop["x_ref"],this.prop["y_ref"]],
-														[this.prop["x_win"],this.prop["y_win"]]) 
+														[this.prop["sample_window_width"],this.prop["sample_window_height"]],
+														[this.target_window_width,this.target_window_height]) 
 			; }catch any as e{
 			; 	temp := CULErrorHandler(e,"Error trying to get dimentions. `n`nPlease try reinstalling to get images in the right folder.`n(discont.)Please try menu>dev-mode>verify_all to redownload possible missing files.")
 			; }
@@ -2392,8 +2419,8 @@ class ScenarioDetector {
 			if type(coords) == "String"
 				msgbox(identifier " was given " coords "(str:coords) which is no longer a valid option please give an array pretranslated")
 			if type(coords) == "Array"{
-				this.prop["x"] := coords[1]
-				this.prop["y"] := coords[2]		
+				this.prop["last_seen_x"] := coords[1]
+				this.prop["last_seen_y"] := coords[2]		
 				this.x := coords[1]			;to allow fo display of what pixels are expected we load into the "lastfound" vars expected coords
 				this.y := coords[2]			;to allow fo display of what pixels are expected we load into the "lastfound" vars expected coords
 				;discontinued if coords.Length = 3
@@ -2414,7 +2441,7 @@ class ScenarioDetector {
 			this.load()
 
 			if LOG_LEVEL 
-				disp(identifier " has loaded [" this.prop["x"] ":" this.prop["y"] "] c=" this.prop["color_target"],3)
+				disp(identifier " has loaded [" this.prop["last_seen_x"] ":" this.prop["last_seen_y"] "] c=" this.prop["color_target"],3)
 		}
 
  		class Ext extends ScenarioDetector.Pix {
@@ -2426,15 +2453,15 @@ class ScenarioDetector {
 					if coords.length = 3							;handles ui compensation requests
 						this.prop["ui_compensate"] := coords[3]
 					if coords.Length < 4{							;handles pixels as input options
-						this.prop["x1"] := coords[1]-LocalTol
-						this.prop["y1"] := coords[2]-LocalTol
-						this.prop["x2"] := coords[1]+LocalTol	
-						this.prop["y2"] := coords[2]+LocalTol
+						this.prop["search_x1"] := coords[1]-LocalTol
+						this.prop["search_y1"] := coords[2]-LocalTol
+						this.prop["search_x2"] := coords[1]+LocalTol	
+						this.prop["search_y2"] := coords[2]+LocalTol
 					}else{
-						this.prop["x1"] := coords[1]
-						this.prop["y1"] := coords[2]
-						this.prop["x2"] := coords[3]
-						this.prop["y2"] := coords[4]		
+						this.prop["search_x1"] := coords[1]
+						this.prop["search_y1"] := coords[2]
+						this.prop["search_x2"] := coords[3]
+						this.prop["search_y2"] := coords[4]		
 					}			
 				}
 				
@@ -2461,6 +2488,7 @@ class ScenarioDetector {
 
 				this.load()
 				;defines coords for this with this.prop map info like offset and win-size
+				this._update_target_window_info()
 				this._refine_coords()				
 			}		
 		}
@@ -2477,10 +2505,10 @@ class ScenarioDetector {
 				;mode(2 will) allow for pixels to be check in chain-distance rather than cluster/origin distance from first pixel
 
 				; if type(coords) == "Array"{
-				; 	this.prop["x1"] := coords[1]
-				; 	this.prop["y1"] := coords[2]
-				; 	this.prop["x2"] := coords[3]
-				; 	this.prop["y2"] := coords[4]
+				; 	this.prop["search_x1"] := coords[1]
+				; 	this.prop["search_y1"] := coords[2]
+				; 	this.prop["search_x2"] := coords[3]
+				; 	this.prop["search_y2"] := coords[4]
 				; }
 				if type(id_list) = "string"{
 					MsgBox id_list ".pix.cluster requires an array containing [ID, count] for it's ID"
@@ -4012,9 +4040,9 @@ pixel_delta(p1,p2,delta_threshold:=50){
 	*/
 	if type(p1) != "ScenarioDetector.Pix" or type(p2) != "ScenarioDetector.Pix"
 		MsgBox "pixel delta was given an invalid pixel-obj `n" string(p1) "`n" string(p2)
-	a_raw := PixelGetColor(p1.prop["x"], p1.prop["y"])	;this step to not double PixelGetColor for later
+	a_raw := PixelGetColor(p1.prop["last_seen_x"], p1.prop["last_seen_y"])	;this step to not double PixelGetColor for later
 	a_color := hex_to_rgb(a_raw)
-	b_color := hex_to_rgb(PixelGetColor(p2.prop["x"], p2.prop["y"]))
+	b_color := hex_to_rgb(PixelGetColor(p2.prop["last_seen_x"], p2.prop["last_seen_y"]))
 	delta_array := [Abs(a_color[1]-b_color[1]), Abs(a_color[2]-b_color[2]), Abs(a_color[3]-b_color[3])]
 	delta := delta_array[1]+delta_array[2]+delta_array[3]
 	threshold_exceeded := delta > delta_threshold ? True : False
@@ -4022,7 +4050,7 @@ pixel_delta(p1,p2,delta_threshold:=50){
 	marker_color := threshold_exceeded ? "0xBBBBBB" : "0xff0dd3"  ;since sub threshold means missing UI it is pink
 	; create target, ui array
 	user_colors:= [a_raw, marker_color]
-	h := tool.highlight("a_color", [p1.prop["x"], p1.prop["y"]], user_colors, , 1, 1)
+	h := tool.highlight("a_color", [p1.prop["last_seen_x"], p1.prop["last_seen_y"]], user_colors, , 1, 1)
 	h.show()
 	if LOG_LEVEL
 		ToolTip "delta: " delta_array[1] ", " delta_array[2] ", " delta_array[3] " :: " delta , A_ScreenWidth*0.9, A_ScreenHeight*0.9, 5
