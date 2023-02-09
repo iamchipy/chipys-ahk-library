@@ -30,8 +30,6 @@ global LOG_LEVEL := 5
 global SCRIPT_NAME := "DefaultChipysUtilityLibraryName"
 global CFG_PATH := SCRIPT_NAME ".cfg"
 global LOG_PATH := SCRIPT_NAME ".log"
-global DEBUG := LOG_LEVEL  ; to be discontinued in favour of LOG_LEVEL
-global INI_FILE_NAME := LOG_PATH ; to be discontinued in favour of CFG_FILE_NAME
 
 APP_VERSION := "0.0.1", unused := "custom var"
 ;@Ahk2Exe-Let U_version = %A_PriorLine~U)^(.+"){1}(.+)".*$~$2%
@@ -608,7 +606,7 @@ class ThreeButtonMenu {
 		this.save_timer := objbindmethod(this, "_save_last")
 		this.display_time := display_time
 		try
-			this.current_index:=integer(IniRead(INI_FILE_NAME, "TBM", "last_selected"))
+			this.current_index:=integer(IniRead(CFG_PATH, "TBM", "last_selected"))
 
 		;run setup
 		this._gui_build()
@@ -701,8 +699,8 @@ class ThreeButtonMenu {
 	}	
 
 	_save_last(){
-		IniWrite this.current_index, INI_FILE_NAME, "TBM", "last_selected"
-		if DEBUG 
+		IniWrite this.current_index, CFG_PATH, "TBM", "last_selected"
+		if LOG_LEVEL 
 			tooltip "_save_last()" A_TickCount
 	}
 
@@ -897,7 +895,7 @@ class ConfigManagerTool {
 	__new(file_name:=0, custom_section:=0, client_name:=0){
 
 		;sets default for custom section is != 0
-		((file_name)?(this.fn:=file_name):(this.fn:=INI_FILE_NAME))					;accepts custom name or uses normal
+		((file_name)?(this.fn:=file_name):(this.fn:=CFG_PATH))					;accepts custom name or uses normal
 		((custom_section)?(this.section:=custom_section):(this.section:="ConfigManager"))
 		((client_name)?(this.client_name:=client_name):(MsgBox(custom_section " MISSING client name")))
 		this.gui_size_limit_height := 20
@@ -1055,7 +1053,7 @@ class ConfigManagerTool {
 					this.gui.Add(obj.type, "xp+30 w" round(GUI_FONT_SIZE*10) " v" key, obj.value)
 				if obj.type = "DropDownList"{
 
-					if DEBUG
+					if LOG_LEVEL
 						tooltip key "`n" obj.value "`n`n" obj.pipelist
 					temp:= this.gui.Add(obj.type, "lowercase altsubmit xp+30 w200 v" key " choose" obj.value, obj.pipelist)
 					temp.OnEvent("change",(obj_of_event,*)=> this.gui_apply_preset(obj_of_event))
@@ -1093,7 +1091,7 @@ class ConfigManagerTool {
 				if type(obj) != "ConfigEntry"{	;no longer treating as an error by just a text field
 					; msgbox "Encounterd possible faulty/old ini setting entry: '" key "' and will now attempt to self-correct"
 					; IniDelete this.fn, this.section , key
-					if DEBUG 
+					if LOG_LEVEL 
 						msgbox "Encounterd possible faulty/old ini setting entry: '" key "' NEEDS TO BE REMOVED FROM config.ini"
 					Continue
 				}
@@ -1224,7 +1222,7 @@ class ConfigManagerTool {
 	}
 
 	gui_apply_preset(obj_of_event){
-		if DEBUG
+		if LOG_LEVEL
 			MsgBox this.c2["preset"].value "->" obj_of_event.value "(" obj_of_event.Text ")"
 
 		;sets preset map entry's value
@@ -1538,7 +1536,10 @@ class Tool {
 		class Pixel extends Tool.Mouse {
 			__new(target_window){
 				this._capture_next("LButton",(*)=>this.get())
-				WinActivate target_window						;set client window (what ever app you are wroking in active)	
+				try{
+					WinActivate target_window						;set client window (what ever app you are wroking in active)	
+					log("DEBUG:Pixel extends Tool.Mouse ==> attempting to focus '" target_window "'")
+				}
 				this.done:=0
 			}
 
@@ -1778,7 +1779,7 @@ class Tool {
 				disp( type(e) "(Invalid File)  >>  " this.img_name)
 
 			this.gui_obj.show("x" x " y" y " h" h " w" w " NA")
-			if DEBUG
+			if LOG_LEVEL
 				MsgBox "x" x " y" y " h" h " w" w "`n" 
 		}
 
@@ -1808,7 +1809,7 @@ class Tool {
 				if A_Index = this.img_index{
 					this.img_path := this.img_folder "\" A_LoopFileName
 					this.img_name := A_LoopFileName
-					if DEBUG
+					if LOG_LEVEL
 						disp(A_LoopFileName )
 					if this.gui_obj{
 						this.hide()
@@ -1890,9 +1891,10 @@ class Action {
 
 class ScenarioDetector {
 	/*
-	Usage: instantiate a ScenarioDetector obj
+	Usage: instantiate with: new_detector:=ScenarioDetector.pix(CommonFramework_obj)
 	*/
 	__init(){
+
 		;define variables that will get saved or need defaults
 		this.coord_mode_to_use := "Screen"
 		this.prop := Map()							;all saved properties are now in this map for easy of saving
@@ -1947,6 +1949,7 @@ class ScenarioDetector {
 		this.m_e := 0
 		this.m_w := 0
 		this.tile := 0
+
 	}
 
 	_refine_coords(refine_array:=0){ ;update offset/win(refine_array) & 'live' with prop[]ratios+offset
@@ -1987,37 +1990,28 @@ class ScenarioDetector {
 
 	_wipe(){
 		;wipe entire save section, likely to force reselections of stuff
-		Inidelete(A_WorkingDir "/" INI_FILE_NAME, this.id)
+		Inidelete(A_WorkingDir "/" CFG_PATH, this.id)
 		sleep 100
 	}
 
 	_save_prop(prop_name){
-		IniWrite(this.prop[prop_name], A_WorkingDir "/" INI_FILE_NAME, this.id, prop_name)
+		IniWrite(this.prop[prop_name], CFG_PATH, this.id, prop_name)
 		; if DEBUG 
 		; 	ToolTip "ScenarioDetector " this.type " saving " this.%prop_name% " to:`n" A_WorkingDir "/" INI_FILE_NAME
 	}
 
 	_load_prop(prop_name){
-		
-		temp := iniread(INI_FILE_NAME, this.id, prop_name, "KEY_ERROR")
-		; if "ui_hurt_A" = this.hrid{
-		; 	MsgBox INI_FILE_NAME " " this.id " " prop_name " attempting"
-		; 	run INI_FILE_NAME
-		; 	ToolTip "_load_prop('" this.hrid "')`n" temp " of type " type(temp) " into " prop_name
-		; }
-		if DEBUG
-			ToolTip "_load_prop('" this.hrid "')`n" temp " of type " type(temp) " into " prop_name
+		; sub-method to read in a single key//value pair
+		temp := iniread(CFG_PATH, this.id, prop_name, "KEY_ERROR")
+		log("SPAM:_load_prop('" this.hrid "')	|" temp "| of type " type(temp) " into '" prop_name "'")
 		if temp == "KEY_ERROR" or temp == "FFFFFF"{
-			; msgbox "errors here"
+			; custom fail-case for when there is missing data in the ini - functioning like a return False with a catch
 			throw { message: "KEY_ERROR", what:  A_WorkingDir "/" prop_name, extra: "_load_prop('" prop_name "') for '" this.hrid "' not found in ini file"}
 		}
 		this.prop[prop_name] := temp
 	}
 
 	show_coords(length_to_show:=1000, live_mode:=0){
-		; if debug 
-		; 	ToolTip "show_coords: " this.hrid "`nLastSeen: " this.x ":" this.y "`nin: " 
-
 		if live_mode			;not the case by default only an option for specifically shows what is live with direct call by
 		    this.last_coords := this.is_present() 	;forcing it to run, is present check first to fill the data of current screen 
 
@@ -2032,12 +2026,11 @@ class ScenarioDetector {
 			send_color := this.color_mark		
 		}
 
-		if debug {
-			str := ""
-			loop send_coords.Length
-				str .= send_coords[A_Index] " "
-			ToolTip "show_coords: " this.hrid "`nLastSeen: " this.x ":" this.y "`nin: " str
-		}
+		;log
+		coord_str := ""
+		loop send_coords.Length
+			coord_str .= send_coords[A_Index] " "
+		log( "DEBUG:show_coords: '" this.hrid "' LastSeen:		" this.x ":" this.y "		||in: " this.client_name "  ||area:" coord_str)
 
 		;now make highlight with above 'dynamic' flexie vars
 		this.hud_obj := tool.highlight(	this.id, 
@@ -2069,11 +2062,11 @@ class ScenarioDetector {
 				this.x := this.last_coords[1]
 				this.y := this.last_coords[2]
 				this.update_last_seen()
-				if DEBUG or visual
+				if LOG_LEVEL or visual
 					this.show_coords(length_to_show)	
 				Return 1
 			}
-			if DEBUG and visual
+			if LOG_LEVEL and visual
 				this.show_coords(length_to_show)				
 			Return 0
 		}
@@ -2085,11 +2078,11 @@ class ScenarioDetector {
 				this.x := x
 				this.y := y
 				this.update_last_seen()
-				if DEBUG or visual
+				if LOG_LEVEL or visual
 					this.show_coords(length_to_show)					
 				Return 1
 			}
-			if DEBUG and visual
+			if LOG_LEVEL and visual
 				this.show_coords(length_to_show)				
 			Return 0
 		}
@@ -2101,11 +2094,11 @@ class ScenarioDetector {
 				this.x := x
 				this.y := y	
 				this.update_last_seen()			
-				if DEBUG or visual
+				if LOG_LEVEL or visual
 					this.show_coords(length_to_show)					
 				Return 1
 			}
-			if DEBUG and visual
+			if LOG_LEVEL and visual
 				this.show_coords(length_to_show)				
 			Return 0		
 		}
@@ -2126,7 +2119,7 @@ class ScenarioDetector {
 															 this.sub_pixel[i].y+this.range,
 															 this.sub_pixel[i].y+this.range])
 				}else{
-					if DEBUG and visual
+					if LOG_LEVEL and visual
 						this.show_coords(length_to_show)	
 					Return 0 ; sub_pixel i isn't present we failed to see full cluster so exit 
 				}
@@ -2142,7 +2135,7 @@ class ScenarioDetector {
 
 	save(){
 		this._save_prop("color_target")
-		; this._save_prop("sub_count") not needed
+
 		this._save_prop("x")
 		this._save_prop("y")
 		this._save_prop("x1")
@@ -2159,12 +2152,11 @@ class ScenarioDetector {
 	}	
 
 	load(use_static_coords:=0){
-		log("DEBUG:" this.hrid " loading..." this.hrid) 
+		; method to try read-in/load any saved data matching this instance from the ini
+		log("DEBUG:ScenarioDetector.*.Load(): hrid='" this.hrid "'" ) 
 		;try load search area
 		if !use_static_coords{						;use_static_coords is for a hardcoded area or pixel (not recommended)
 			try{									;try block with silent catch for option properties
-				; if "ui_hurt_A" = this.hrid
-					; MsgBox "hi"
 				this._load_prop("color_target")
 				this._load_prop("x_ref")
 				this._load_prop("y_ref")
@@ -2204,7 +2196,7 @@ class ScenarioDetector {
 			}catch any as e{
 				; msgbox "catching: " e.message
 				if e.message == "KEY_ERROR"{	;KEY_ERROR is a custom err thrown when no value found for key
-					if DEBUG 
+					if LOG_LEVEL 
 						ToolTip e.extra " => " e.message
 					if this.type == "pixel" or this.type == "pixel_ext"{
 						disp("No config detected, please select a pixel for '" this.hrid "' now.",,,0)
@@ -2295,8 +2287,6 @@ class ScenarioDetector {
 
 		disp("'" this.hrid "' pixel selected")
 		this.save_all()
-		; if DEBUG
-		; 	ToolTip "received " temp.x1 ":" temp.y1 " -> " temp.color
 	}
 
 	class Img extends ScenarioDetector{
@@ -2357,6 +2347,7 @@ class ScenarioDetector {
 	}
 	
 	class Pix extends ScenarioDetector{
+		; extend ScenarioDetector to build a PixelDetector object
 		__New(identifier, coords:=False, tol := 2, force_reselection:=0, client_name:=0, known_info:=0, target_color:=0){
 			;handles defaults not in use
 			if type(coords) == "String"
@@ -2383,11 +2374,12 @@ class ScenarioDetector {
 			this.tol := tol
 			this.load()
 
-			if DEBUG 
+			if LOG_LEVEL 
 				disp(identifier " has loaded [" this.prop["x"] ":" this.prop["y"] "," this.prop["ui_compensate"] "] c=" this.prop["color_target"],3)
 		}
 
  		class Ext extends ScenarioDetector.Pix {
+			;extends ScenarioDetector.Pix with some additional features for PixelDetector object
 			__New(identifier, coords:=0, LocalTol:=5, force_reselection:=0, client_name:=0, target_color:=0) {
 				if type(coords) == "String"
 					coords := this._translate_zone(coords)
@@ -2435,6 +2427,7 @@ class ScenarioDetector {
 		}
 
 		class Cluster extends ScenarioDetector.Pix{
+			;extends ScenarioDetector.Pix with some additional features for cluster of PixelDetector objects
 			__New(id_list, coords:=0, range:=100, LocalTol:=100, mode:=1, force_reselection:=0, client_name:=0) {
 				;a scenario detector that runs pixel_ext and then check for subsequent pixel_ext in RANGE distance from first 
 				;pixel detection to allow for more sophisticated detection of situations
@@ -2620,7 +2613,7 @@ class LicenseTool{
 		;settings_obj.c["discord_name"].value := u
 		;settings_obj._save("discord_name", u)
 		this._update_self(u)
-		if DEBUG 
+		if LOG_LEVEL 
 			ToolTip "updating useranme => " this.user_name
 	}
 
@@ -2629,7 +2622,7 @@ class LicenseTool{
     		this._update_self(new_user_name)
 
        	if this.user_name = "dem0#1234_" A_UserName "_" or this.user_name = "_" A_UserName "_"{
-       		if DEBUG
+       		if LOG_LEVEL
        			ToolTip "prompting from authenticate"
        		this.prompt_user_name()
        	}
@@ -2769,7 +2762,7 @@ class DiscordWebhook {
     	if !this.webhook
     		this.webhook := "MISSING_WEBHOOK_URL"
 		url_post(this.webhook, json_payload)
-		if DEBUG 
+		if LOG_LEVEL 
 			MsgBox this.webhook '`n`n' json_payload
     }
 
@@ -2823,7 +2816,7 @@ class DependencyManager {
 	this is a custom object that helps manager files that are needed and handles downloading, verifying and checking 
 	*/
 	__New(file_name:=0, ini_section:="DependencyManager"){
-		((file_name)?(this.fn:=file_name):(this.fn:=INI_FILE_NAME))
+		((file_name)?(this.fn:=file_name):(this.fn:=CFG_PATH))
 		this.section := ini_section
 
 		; if DEBUG
@@ -3015,7 +3008,7 @@ class UITool {
 			this.gui_obj := gui("-DPIScale",title)
 			this.gui_obj.opt("-caption")
 			;	to fix the error with the line below being typemismatch detele ini file
-			if DEBUG
+			if LOG_LEVEL
 				ToolTip GUI_FONT_SIZE
 			this.gui_obj.setfont("c00cccc q5 s" round(GUI_FONT_SIZE*0.8), "Terminal")				; new gui style with gray and teal	
 			this.gui_obj.BackColor := "666666"								; gray bg for gui
@@ -3325,7 +3318,7 @@ class UE4Coord {
 
 		}catch any as e{
 			disp("err building ue4c-obj")
-			if DEBUG{ 
+			if LOG_LEVEL{ 
 				msgbox "could not read: '" clipboard_str "' possibly invalid clipboard`n" e.message "`n`n" e.what "`n`n" e.extra
 				;MsgBox "input was: " clipboard_str "`ndata.len: " data.Length
 			}
@@ -3384,7 +3377,7 @@ class UE4CoordHandler{
 				try{
 					return this.new_coord("conformed", input_var)
 				}catch any as e{
-					if DEBUG {
+					if LOG_LEVEL {
 						MsgBox "problem conforming input_var (content to follow)"
 						MsgBox "problem conforming input_var: " input_var
 					}	
@@ -3524,12 +3517,12 @@ class UE4CoordHandler{
 		a := this._is_conformed(a)
 		b := this._is_conformed(b)
 		if !a or !b{
-			if DEBUG 
+			if LOG_LEVEL 
 				msgbox "calculate_differential() was given non UE4Coord-obj variables"
 			return False
 		}
 		differential_array :=  [a.x-b.x,a.y-b.y,a.z-b.z,a.yaw-b.yaw,a.pitch-b.pitch]
-		if DEBUG 
+		if LOG_LEVEL 
 			msgbox "returning ue4coord obj from diff array next"
 		return UE4Coord(differential_array)
 	}
@@ -3672,7 +3665,7 @@ on_screen_feedback_line(activity:="", index:=1, to_hide:=0, duration:=5000){
 		display_text := " " activity
 	}	
 	
-	if DEBUG{	;if in debug/developermode
+	if LOG_LEVEL{	;if in debug/developermode
 		; ((statement) ? (TRUE-action) : (FALSE-action))
 		global ticker := ((ticker="-") ? (ticker:="\") : (    ((ticker="\") ? (ticker:="/") : (ticker:="-"))    ))
 		display_text := display_text " " ticker
@@ -3744,7 +3737,7 @@ url_get(url){
 	    get_raw.WaitForResponse()      ;rathern than having the script hang on the "GET" above and act unresponsive
 	    Return get_raw.ResponseText
 	}catch any as e{
-		if DEBUG{
+		if LOG_LEVEL{
 			CULErrorHandler(e, "url_get: " url)
 			MsgBox "url is type: " type(url)
 		}
@@ -3775,7 +3768,7 @@ url_post(url, payload){
 		*/
 		pWHttp.Send(Payload)
 	}catch any as e{
-		if DEBUG
+		if LOG_LEVEL
 			CULErrorHandler(e, "CUL:url_post():err reaching:url:' " url " '`n" payload)
 	}
 }
@@ -3816,7 +3809,7 @@ coords_normalize_pair(coord_pair, baseline_res:=0, client_name:= "A"){
 	;set baseline defaults  (TAKEN OUT/  'or type(baseline) != "array"')
 	if !baseline_res {	;if no screen res is provided
 		baseline_res:=[1920,1080]					;sets the base res value to 1080p 
-		if DEBUG  && !baseline_res  ;took out (&& type(baseline) != "array") since it's not used
+		if LOG_LEVEL  && !baseline_res  ;took out (&& type(baseline) != "array") since it's not used
 			tooltip "a coords pair is not of ARRAY type"
 	}
 
@@ -3995,7 +3988,7 @@ pixel_delta(p1,p2,delta_threshold:=50){
 	user_colors:= [a_raw, marker_color]
 	h := tool.highlight("a_color", [p1.prop["x"], p1.prop["y"]], user_colors, , 1, 1)
 	h.show()
-	if DEBUG
+	if LOG_LEVEL
 		ToolTip "delta: " delta_array[1] ", " delta_array[2] ", " delta_array[3] " :: " delta , A_ScreenWidth*0.9, A_ScreenHeight*0.9, 5
 	Return threshold_exceeded
 }
@@ -4038,7 +4031,7 @@ CUL_decode(test_str := "any string from input args"){
         "UInt*", &test_str_decoded_length)
     {
         ; error
-        if DEBUG
+        if LOG_LEVEL
             MsgBox "error phase 1 decoding (code: " DllCall("GetLastError") ") " test_str
     }
 
@@ -4052,7 +4045,7 @@ CUL_decode(test_str := "any string from input args"){
         "UInt*", test_str_decoded_length)
     {
         ; error
-        if DEBUG 
+        if LOG_LEVEL 
             ToolTip "error phase 2 decoding (code: " DllCall("GetLastError") ") " test_str          
     }
     ; msgbox(StrGet(test_str_output),"CUL Encoding()")
@@ -4104,7 +4097,7 @@ CUL_encode(test_str := "any string from input args"){
 			                "Ptr",0)
     if !return_value{
         ; error
-        if DEBUG
+        if LOG_LEVEL
             ToolTip "error phase 1 encoding " test_str                
     }
 
@@ -4121,7 +4114,7 @@ CUL_encode(test_str := "any string from input args"){
 			                "Ptr",0)
     if !return_value{
         ; error
-        if DEBUG
+        if LOG_LEVEL
             ToolTip "error phase 2 encoding (code: " DllCall("GetLastError") ") " test_str '`n`nINFO:`n234(0xEA) = ERROR_MORE_DATA (input str longer than buffer)`n13(0xD) = ERROR_INVALID_DATA The input data is invalid`n87(0x57) = ERROR_INVALID_PARAMETER'
     }
     ; tooltip "test_str_encoded_length: " test_str_encoded_length
