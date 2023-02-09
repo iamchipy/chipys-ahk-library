@@ -1936,7 +1936,7 @@ class ScenarioDetector {
 		this.prop["y_win"] := A_ScreenHeight 		;hieght of client (default assumes fullscreen)		
 		this.prop["x_off"] := 0					;coordinate representing the origin of the client window (offset + coord should = screen pixel)
 		this.prop["y_off"] := 0					;coordinate representing the origin of the client window (offset + coord should = screen pixel)
-		this.prop["ui_compensate"] := false 		;for telling if this pixel should have it's coord adjusted accounting to ui scaler
+		;discontinued this.prop["ui_compensate"] := false 		;for telling if this pixel should have it's coord adjusted accounting to ui scaler
 
 		this.prop["x"] := 0		;x of (last) found location of scenario
 		this.prop["y"] := 0		;y of (last) found location of scenario
@@ -1963,7 +1963,7 @@ class ScenarioDetector {
 		this.showing_search_area := 0
 		this.mode := "base"
 		this.tile_flag := 0
-		this.area_flag := 0
+		this.area_flag := 0  ; a bit redundant but needed for extentions that have their own name type not called "area"
 		this.last_seen := 0
 		this.age_ms := 0
 		this.sub_count := 0
@@ -1998,14 +1998,11 @@ class ScenarioDetector {
 		this.update_offset(xywh_info_array[1])			;update the object's current offset prop (to be saved)
 		this.update_win(xywh_info_array[2])				;update the object's current window dimentions prop (to be saved)
 
-		;new system (scaler for ark ui)
 		;converts client coords (sample) to client coords current res
 		temp_coords :=[this.prop["x1"],this.prop["y1"],this.prop["x2"],this.prop["y2"]]
-		if this.prop["ui_compensate"]
-			temp_coords :=[this.prop["x1"],this.prop["y1"],this.prop["x2"],this.prop["y2"],this.prop["ui_compensate"]]
-		normalized_array := coords_normalize_array(	temp_coords,
-													[this.prop["x_ref"],this.prop["y_ref"]],
-													xywh_info_array[2])
+		normalized_array := coord_pair_rescale_for_new_res(	temp_coords,
+															[this.prop["x_ref"],this.prop["y_ref"]],
+															xywh_info_array[2])
 		this.x1 := normalized_array[1] + this.prop["x_off"]
 		this.y1 := normalized_array[2] + this.prop["y_off"]
 		this.x2 := normalized_array[3] + this.prop["x_off"]
@@ -2032,6 +2029,7 @@ class ScenarioDetector {
 	}
 
 	_load_prop(prop_name){
+		; being replaced by _load_ini_section()
 		; sub-method to read in a single key//value pair
 		temp := iniread(CFG_PATH, this.id, prop_name, "KEY_ERROR")
 		log("SPAM:_load_prop('" this.hrid "')	|" temp "| of type " type(temp) " into '" prop_name "'")
@@ -2040,6 +2038,23 @@ class ScenarioDetector {
 			throw { message: "KEY_ERROR", what:  A_WorkingDir "/" prop_name, extra: "_load_prop('" prop_name "') for '" this.hrid "' not found in ini file"}
 		}
 		this.prop[prop_name] := temp
+	}
+
+	;Method to load any/all data in the section matching this.id should it exist
+	_load_ini_section(){
+		try
+			ini_section := iniread(CFG_PATH, this.id)
+		catch
+			return	; if this fails we don't really care more than it failed so just exit
+		
+		loop ini_section.length {
+			line:= StrSplit(ini_section[A_Index], "=")
+			key:=line[1]
+			val:=line[2]
+
+			log("SPAM:_load_prop('" this.hrid "')	|" val "| of type " type(val) " into '" key "'")
+			this.prop[key] := val
+		}
 	}
 
 	show_coords(length_to_show:=1000, live_mode:=0){
@@ -2184,63 +2199,61 @@ class ScenarioDetector {
 		this._save_prop("y_off")	
 	}	
 
-	load(use_static_coords:=0){
-		; method to try read-in/load any saved data matching this instance from the ini
+	; method to try read-in/load any saved data matching this instance from the ini
+	load(){
+		
 		log("DEBUG:ScenarioDetector.*.Load(): hrid='" this.hrid "'" ) 
-		;try load search area
-		if !use_static_coords{						;use_static_coords is for a hardcoded area or pixel (not recommended)
-			try{									;try block with silent catch for option properties
-				this._load_prop("color_target")
-				this._load_prop("x_ref")
-				this._load_prop("y_ref")
-				this._load_prop("x_win")
-				this._load_prop("y_win")
-				this._load_prop("x_off")
-				this._load_prop("y_off")
-				this._load_prop("x")
-				this._load_prop("y")
-				this._load_prop("ui_compensate")
-			}catch any{
-				; if "ui_hurt_A" = this.hrid{
-				; 	MsgBox this.hrid " failed to load everything" 
-				; 	MsgBox e.message "`n" e.what
-				; }
-				; msgbox "caught correctly by parent"
+		;Load any data that might exist in ini
+		this._load_ini_section()
+
+		; try load required data starting with most basic structure and advance
+		try{	
+			; first case - check for forced reselection
+			if this.force_reselection{
+				this.force_reselection :=0 
+				throw ValueError("Custom Error to hide when hotkeys are deassigned", this.hrid "force_reselection image", " ")
 			}
-			try{	;try block for values that aren't optional 
-				if this.force_reselection{
-					this.force_reselection :=0 
-					; MsgBox this.hrid " forced reselections"
-					throw ValueError("Custom Error to hide when hotkeys are deassigned", this.hrid "force_reselection image", " ")
+
+			;if have info for secondary coord (aka part of area) then we must be good
+			if this.prop["x2"]	 	
+				Return
+
+			;if have info for pixel's coord then we are good
+			if this.prop["x"] and this.type == "pixel"
+				Return		
+			
+			; if we are still here we need to look as additional types:
+			this._load_prop("x1")			;load x1 -used in pixel/ext/img
+			this._load_prop("y1")			;load y1 -used in pixel/ext/img
+
+			;if this.area_flag we know it's ext/img only
+			if this.area_flag{				
+				this._load_prop("x2")		;load x2 -used in ext/img to define zone end
+				this._load_prop("y2")		;load y2 -used in ext/img to define zone end
+			}
+
+			;for pix.ext we are interested in loading last seen
+			if this.type == "ext"{			
+				;TODO build a way for PIX.EXT to load last seen info
+			}	
+
+		}catch any as e{
+			;KEY_ERROR is a custom err thrown when no value found for key
+			if e.message == "KEY_ERROR"{	
+				log("INFO: " this.hrid " has incomplete/corrupt saved data. Prompting for re-picking. " e.extra " => " e.message)
+				; if we are running a point type
+				if this.type == "pixel" or this.type == "pixel_ext"{
+					disp("Please click on a pixel to sample for '" this.hrid "' now.",,,0)
+					this.picker("pixel")
 				}
-				if this.prop["x2"]	 	;if have info for secondary coord (aka part of area) then we must be good
-					Return
-				if this.prop["x"] and this.type == "pixel"	;;if have info for pixel's coord then we are good
-					Return					
-				this._load_prop("x1")			;load x1 -used in pixel/ext/img
-				this._load_prop("y1")			;load y1 -used in pixel/ext/img
-				if this.area_flag{				;if this.area_flag we know it's ext/img only
-					this._load_prop("x2")		;load x2 -used in ext/img to define zone end
-					this._load_prop("y2")		;load y2 -used in ext/img to define zone end
-				}
-				if this.type == "ext"{			;for pix.ext we are interested in loading last seen
-					;load last seen TODO
-				}	
-			}catch any as e{
-				; msgbox "catching: " e.message
-				if e.message == "KEY_ERROR"{	;KEY_ERROR is a custom err thrown when no value found for key
-					log("INFO: " this.hrid " has incomplete/corrupt saved data. Prompting for re-picking. " e.extra " => " e.message)
-					if this.type == "pixel" or this.type == "pixel_ext"{
-						disp("Please click on a pixel to sample for '" this.hrid "' now.",,,0)
-						this.picker("pixel")
-					}
-					if this.area_flag and !this.prop["x2"]{
-						disp("Please drag-select an area to search for '" this.hrid "' now.",,,0)
-						this.picker("area")
-					}
+				; if we are running an area type
+				if this.area_flag {  ;removed   and !this.prop["x2"]
+					disp("Please drag-select an area to search for '" this.hrid "' now.",,,0)
+					this.picker("area")
 				}
 			}
 		}
+
 	}	
 
 	update_last_seen(){
@@ -2351,7 +2364,7 @@ class ScenarioDetector {
 			; try{
 				; TODO remove IMFV and use GUI creation https://www.autohotkey.com/boards/viewtopic.php?f=6&t=3806
 				
-				if !FileExist(this.file_name)
+				if !FileExist(a_workingdir this.file_name)
 					MsgBox "Image file appear to be missing from path below. You might need to download the required imgPack from www.chipy.dev `n`n" a_workingdir this.file_name
 
 				this.imagetool := imagetool()									;build obj for image tool
@@ -2383,8 +2396,8 @@ class ScenarioDetector {
 				this.prop["y"] := coords[2]		
 				this.x := coords[1]			;to allow fo display of what pixels are expected we load into the "lastfound" vars expected coords
 				this.y := coords[2]			;to allow fo display of what pixels are expected we load into the "lastfound" vars expected coords
-				if coords.Length = 3
-					this.prop["ui_compensate"] := coords[3]		
+				;discontinued if coords.Length = 3
+				; 	this.prop["ui_compensate"] := coords[3]		
 			}
 
 			((client_name)?(this.client_name:=client_name):(this.client_name:= "AHK_exe " WinGetProcessName("A")))
@@ -2401,7 +2414,7 @@ class ScenarioDetector {
 			this.load()
 
 			if LOG_LEVEL 
-				disp(identifier " has loaded [" this.prop["x"] ":" this.prop["y"] "," this.prop["ui_compensate"] "] c=" this.prop["color_target"],3)
+				disp(identifier " has loaded [" this.prop["x"] ":" this.prop["y"] "] c=" this.prop["color_target"],3)
 		}
 
  		class Ext extends ScenarioDetector.Pix {
@@ -3848,6 +3861,8 @@ coord_pair_rescale_for_new_res(coord_pair, baseline_res:=0, client_name:= "A"){
 		log("DEBUG: coord_pair_rescale_for_new_res() is using [1920,1080] default!	||")
 	}
 
+	; loop coord_pair.Length
+	; 	MsgBox coord_pair[A_Index]
 	; apply rescaling math and return
 	if coord_pair.Length = 2{
 		Return [round(client_res[1]*(coord_pair[1]/baseline_res[1])),
@@ -3856,8 +3871,8 @@ coord_pair_rescale_for_new_res(coord_pair, baseline_res:=0, client_name:= "A"){
 	if coord_pair.Length = 4{
 		Return [round(client_res[1]*(coord_pair[1]/baseline_res[1])),
 				round(client_res[2]*(coord_pair[2]/baseline_res[2])),
-				round(client_res[3]*(coord_pair[3]/baseline_res[3])),
-				round(client_res[4]*(coord_pair[4]/baseline_res[4]))]
+				round(client_res[1]*(coord_pair[3]/baseline_res[1])),
+				round(client_res[2]*(coord_pair[4]/baseline_res[2]))]
 	}	
 
 	; discontinuing UI scaling for ARK(would need to move to it's own function)
