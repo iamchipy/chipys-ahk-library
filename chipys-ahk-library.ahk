@@ -3822,11 +3822,11 @@ file_locate(pattern, search_in:="C:\",  filter:="", flags:="RF"){
 	; 	tooltip  search_in pattern " not found"
 }
 
-	;this tries to take an input coords sample along with it's given screen resolution and convert that into a new screen resolution's
-	;equivalent. It assumes that the UI you are targetting is always centered on screen and always maintains aspect ratio
-	; - coord_pair (Array of 2 or 4 Integers) Accepts 1 or 2 pairs of coordinates that need to be rescaled
-	; - baseline_res (Array of 2 Integers) Represents the X/y Width/Height of the sample
-	; - client_name (Array of 2 Integers // String window name) Accpets an array of target window's X/Y (W/H) size or name of target window
+;this tries to take an input coords sample along with it's given screen resolution and convert that into a new screen resolution's
+;equivalent. It assumes that the UI you are targetting is always centered on screen and always maintains aspect ratio
+; - coord_pair (Array of 2 or 4 Integers) Accepts 1 or 2 pairs of coordinates that need to be rescaled
+; - baseline_res (Array of 2 Integers) Represents the X/y Width/Height of the sample
+; - client_name (Array of 2 Integers // String window name) Accpets an array of target window's X/Y (W/H) size or name of target window
 coord_pair_rescale_for_new_res(coord_pair, baseline_res:=0, client_name:= "A"){
 
 	; discontinuing UI scaling for ARK(would need to move to it's own function)
@@ -3894,20 +3894,6 @@ coord_pair_rescale_for_new_res(coord_pair, baseline_res:=0, client_name:= "A"){
 
 	; ;still returning client based coords (mode)
 	; Return [round(out_x), round(out_y)]
-}
-
-coords_normalize_array(coords_array_in, baseline_res:=0, client_name:= "A"){
-	; version for single coord pair and double coord pair (pixel vs area)
-	if coords_array_in.Length = 5{
-		disp(" ui comp version [" coords_array_in[3] ":" coords_array_in[4] "," coords_array_in[5] "]`n" baseline_res[2] "`n" client_name[2])
-		temp1 := coord_pair_rescale_for_new_res([coords_array_in[1],coords_array_in[2],coords_array_in[5]],baseline_res,client_name)
-		temp2 := coord_pair_rescale_for_new_res([coords_array_in[3],coords_array_in[4],coords_array_in[5]],baseline_res,client_name)
-	}else{
-		temp1 := coord_pair_rescale_for_new_res([coords_array_in[1],coords_array_in[2]],baseline_res,client_name)
-		temp2 := coord_pair_rescale_for_new_res([coords_array_in[3],coords_array_in[4]],baseline_res,client_name)
-	}
-	coords_array_out := [temp1[1],temp1[2],temp2[1],temp2[2]]
-	Return coords_array_out	
 }
 
 toggle_user_input_off(block_timeout:=8000){
