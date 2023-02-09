@@ -2089,7 +2089,7 @@ class ScenarioDetector {
 		coord_str := ""
 		loop display_coords.Length
 			coord_str .= display_coords[A_Index] " "
-		log("DEBUG:show_coords: '" this.hrid "' LastSeen:		" this.x ":" this.y "		||in: " this.client_name "  ||area:" coord_str)
+		log("DEBUG:ScenarioDetector.show_coords: '" this.hrid "' LastSeen:		" this.x ":" this.y "		||in: " this.client_name "  ||area:" coord_str)
 
 		;now make highlight with above 'dynamic' flexie vars
 		this.hud_obj := tool.highlight(	this.id, 
@@ -2109,8 +2109,11 @@ class ScenarioDetector {
 			variation := this.tol
 
 		; if refine_array  ;refine_array if you want to make changes -> [[win-x,win-y],[win-w,win-h]]
-		this._update_target_window_info(refine_array)
-		this._refine_coords()
+		; this._update_target_window_info(refine_array)
+		; this._refine_coords()
+
+		log("DEBUG:ScenarioDetector.is_present:type='" this.type "'==>'" this.hrid "'")
+
 
 		if this.type = "image" {	
 			this.last_coords := find_image(this.file_name,
@@ -2124,11 +2127,13 @@ class ScenarioDetector {
 				this.x := this.last_coords[1]
 				this.y := this.last_coords[2]
 				this.update_last_seen()
-				if LOG_LEVEL or visual
+				log("DEBUG:ScenarioDetector.is_present==> Found '" this.hrid "' at " this.x ":" this.y)
+				if visual
 					this.show_coords(length_to_show)	
 				Return 1
 			}
-			if LOG_LEVEL and visual
+			log("DEBUG:ScenarioDetector.is_present==> '" this.hrid "' currently FALSE ")
+			if visual
 				this.show_coords(length_to_show)				
 			Return 0
 		}
@@ -2217,7 +2222,7 @@ class ScenarioDetector {
 	; method to try read-in/load any saved data matching this instance from the ini
 	load(){
 		
-		log("DEBUG:ScenarioDetector.*.Load(): hrid='" this.hrid "'" ) 
+		log("DEBUG:ScenarioDetector.load(): hrid='" this.hrid "' reading saved data..." ) 
 		;Load any data that might exist in ini
 		this._load_ini_section()
 
@@ -2271,6 +2276,7 @@ class ScenarioDetector {
 			}
 		}
 
+		this.update_search_coords()
 	}	
 
 	update_last_seen(){
@@ -2282,10 +2288,11 @@ class ScenarioDetector {
 	; - coords (Array) Expects array of 2/4x Int to update search coords
 	update_search_coords(coords:=0){		
 		if !coords{
-			this.x1 := this.prop["search_x1"] + this.prop["sample_window_x"]
-			this.y1 := this.prop["search_y1"] + this.prop["sample_window_y"]
-			this.x2 := this.prop["search_x2"] + this.prop["sample_window_x"]
-			this.y2 := this.prop["search_y2"] + this.prop["sample_window_y"]
+			this._update_target_window_info()
+			this.x1 := this.prop["search_x1"] + this.target_window_width
+			this.y1 := this.prop["search_y1"] + this.target_window_height
+			this.x2 := this.prop["search_x2"] + this.target_window_width
+			this.y2 := this.prop["search_y2"] + this.target_window_height
 			Return
 		}
 		this.prop["search_x1"] := coords[1]
@@ -2358,16 +2365,17 @@ class ScenarioDetector {
 		; - search_area (Array) Area can be double-pair coords or area-preset-name String
 		; - variation (Integer) Value 0-254 of how much of a variation from the sample is considered a match
 		; - client_name (String) Target window title/name (AHK_exe recommended)
-		__New(file_name, search_area:=0, variation:=50, client_name:=0) {
+		__New(file_name, search_area:=0, force_reselection:=0, variation:=50, client_name:=0) {
 			
-			if type(search_area) == "String"
-				search_area := this._translate_zone(search_area)
-			if type(search_area) == "Array"{
-				this.prop["search_x1"] := search_area[1]
-				this.prop["search_y1"] := search_area[2]
-				this.prop["search_x2"] := search_area[3]
-				this.prop["search_y2"] := search_area[4]
-			}	
+			; function not currently used or accepible
+			; if type(search_area) == "String"
+			; 	search_area := this._translate_zone(search_area)
+			; if type(search_area) == "Array"{
+			; 	this.prop["search_x1"] := search_area[1]
+			; 	this.prop["search_y1"] := search_area[2]
+			; 	this.prop["search_x2"] := search_area[3]
+			; 	this.prop["search_y2"] := search_area[4]
+			; }	
 
 			if client_name{
 				this.client_name:=client_name
@@ -2379,11 +2387,13 @@ class ScenarioDetector {
 			this.id := this.hrid := StrSplit(file_name , ".")[1]
 			this.tol := variation
 			this.type := "image"
+			this.force_reselection := force_reselection
 			this.area_flag := 1  	;used by parent structure to know if class is doing area functions
 			
 			; now we load in and saved data and if there is none we prompt user for definition
 			this.load()
-
+			
+			log("DEBUG:ScenarioDetector.Img:Created:	'" this.hrid "'	||area:" this.x1 ":" this.y1 " " this.x2 ":" this.y2)
 			;take loaded info and translate into coords used for SCREEN based stuff
 			this._update_target_window_info()
 			; this._refine_coords()	
