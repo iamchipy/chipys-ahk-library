@@ -1933,8 +1933,8 @@ class ScenarioDetector {
 		this.prop := Map()							;all saved properties are now in this map for easy of saving
 		this.prop["sample_window_width"] := 1920					;resolution client at time of search-area setup
 		this.prop["sample_window_height"] := 1080 					;resolution client at time of search-area setup	
-		this.prop["sample_window_x"] := 0					;coordinate representing the origin of the client window (offset + coord should = screen pixel)
-		this.prop["sample_window_y"] := 0					;coordinate representing the origin of the client window (offset + coord should = screen pixel)
+		; this.prop["sample_window_x"] := 0					;coordinate representing the origin of the client window (offset + coord should = screen pixel)
+		; this.prop["sample_window_y"] := 0					;coordinate representing the origin of the client window (offset + coord should = screen pixel)
 		;discontinued this.prop["ui_compensate"] := false 		;for telling if this pixel should have it's coord adjusted accounting to ui scaler
 
 		this.prop["last_seen_x"] := 0		;x of (last) found location of scenario
@@ -1991,10 +1991,10 @@ class ScenarioDetector {
 	_update_search_area(new_search_area_array, xy_origin_array:=0){
 		if xy_origin_array
 			this.update_offset(xy_origin_array)
-		this.x1 := new_search_area_array[1] + this.prop["sample_window_x"]
-		this.y1 := new_search_area_array[2] + this.prop["sample_window_y"]
-		this.x2 := new_search_area_array[3] + this.prop["sample_window_x"]
-		this.y2 := new_search_area_array[4] + this.prop["sample_window_y"]	
+		this.x1 := new_search_area_array[1] + this.target_window_width
+		this.y1 := new_search_area_array[2] + this.target_window_height
+		this.x2 := new_search_area_array[3] + this.target_window_width
+		this.y2 := new_search_area_array[4] + this.target_window_height
 	}
 
 	; Method used to update this Object Instance's info about the target window (either live-pulling the info or via input)
@@ -2089,7 +2089,7 @@ class ScenarioDetector {
 		coord_str := ""
 		loop display_coords.Length
 			coord_str .= display_coords[A_Index] " "
-		log( "DEBUG:show_coords: '" this.hrid "' LastSeen:		" this.x ":" this.y "		||in: " this.client_name "  ||area:" coord_str)
+		log("DEBUG:show_coords: '" this.hrid "' LastSeen:		" this.x ":" this.y "		||in: " this.client_name "  ||area:" coord_str)
 
 		;now make highlight with above 'dynamic' flexie vars
 		this.hud_obj := tool.highlight(	this.id, 
@@ -2118,8 +2118,8 @@ class ScenarioDetector {
 										   this.y1,
 										   this.x2,
 										   this.y2,
-										   variation,
-										   this.scale)
+										   variation)
+										   ; disbaled this.scale function
 			if this.last_coords != 0 {
 				this.x := this.last_coords[1]
 				this.y := this.last_coords[2]
@@ -2386,24 +2386,24 @@ class ScenarioDetector {
 
 			;take loaded info and translate into coords used for SCREEN based stuff
 			this._update_target_window_info()
-			this._refine_coords()	
+			; this._refine_coords()	
 
-			; try{
-				; TODO remove IMFV and use GUI creation https://www.autohotkey.com/boards/viewtopic.php?f=6&t=3806
+			; ; try{
+			; 	; TODO remove IMFV and use GUI creation https://www.autohotkey.com/boards/viewtopic.php?f=6&t=3806
 				
-				if !FileExist(a_workingdir this.file_name)
-					MsgBox "Image file appear to be missing from path below. You might need to download the required imgPack from www.chipy.dev `n`n" a_workingdir this.file_name
+			; 	if !FileExist(a_workingdir this.file_name)
+			; 		MsgBox "Image file appear to be missing from path below. You might need to download the required imgPack from www.chipy.dev `n`n" a_workingdir this.file_name
 
-				this.imagetool := imagetool()									;build obj for image tool
+			; 	this.imagetool := imagetool()									;build obj for image tool
 
-				this.dimentions := this.imagetool.get_image_size(this.file_name)	;gets the x and y size of the image for scaling 
+			; 	this.dimentions := this.imagetool.get_image_size(this.file_name)	;gets the x and y size of the image for scaling 
 
-				this.scale := this.imagetool.rescaler( 	this.dimentions,	; rescale(img_dimentions, ref_dimentions, win_dimentions)
-														[this.prop["sample_window_width"],this.prop["sample_window_height"]],
-														[this.target_window_width,this.target_window_height]) 
-			; }catch any as e{
-			; 	temp := CULErrorHandler(e,"Error trying to get dimentions. `n`nPlease try reinstalling to get images in the right folder.`n(discont.)Please try menu>dev-mode>verify_all to redownload possible missing files.")
-			; }
+			; 	this.scale := this.imagetool.rescaler( 	this.dimentions,	; rescale(img_dimentions, ref_dimentions, win_dimentions)
+			; 											[this.prop["sample_window_width"],this.prop["sample_window_height"]],
+			; 											[this.target_window_width,this.target_window_height]) 
+			; ; }catch any as e{
+			; ; 	temp := CULErrorHandler(e,"Error trying to get dimentions. `n`nPlease try reinstalling to get images in the right folder.`n(discont.)Please try menu>dev-mode>verify_all to redownload possible missing files.")
+			; ; }
 								
 		}
 
