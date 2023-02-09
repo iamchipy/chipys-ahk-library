@@ -1,18 +1,31 @@
-; constructed for AHKv2 Alpha (2.0-a106-4a6b3ff1)
-; 7/1/21 updated for v2.0-134-d3d43350
+/*
+==============================================================================================================
+  ____  _      _                       _              
+ / __ \| |    (_)                     | |             
+| /  \/| |__   _  _ __   _   _      __| |  ___ __   __
+| |    | '_ \ | || '_ \ | | | |    / _` | / _ \\ \ / /
+| \__/\| | | || || |_) || |_| | _ | (_| ||  __/ \ V / 
+ \____/|_| |_||_|| .__/  \__, |(_) \__,_| \___|  \_/  
+                 | |      __/ |                       
+                 |_|     |___/  
+==============================================================================================================
+*/
 ;should be able to find it in (autohotkey.com/download/2.0/)
 if A_AhkVersion != "2.0.2" and !A_IsCompiled  ;no longer logical here: and silent_mode!=True
 	msgbox "You are running AHK v" A_AhkVersion "`n`rHowever CAL was written for v2.0.2`n`nYou may need to download that exact version from autohotkey.com/download/2.0/ if you experince issue in the code"
 
 ;=======================================================
-; CONSTANTS
+; CONSTANTS and FLAGS
 ;=======================================================
-global CAL_VERSION := "3.03"
+global CAL_VERSION := "3.04"
 global ROAMING := A_AppData "\Chipys-AHK-Library"
-; if (!FileExist(INI_FILE_NAME) ) FileAppend("",INI_FILE_NAME)
-; global DEPS := DependencyManager()
 global GUI_FONT_SIZE := "20"		;scaled of base of 20 
 global NATO_UI_FONT := "Share Tech Mono.ttf"
+
+SendMode "Event"
+CoordMode "pixel", "Screen"
+CoordMode "Mouse", "Screen"
+CoordMode "ToolTip", "Screen"
 
 ;=======================================================
 ; CONSTANTS with defaults, expected to be overwritten by scripts
@@ -59,7 +72,7 @@ global ticker := "-"
 
 ; OnError("CUL_err_to_file")
 
-
+; class to group handling script version checks, updates, and downloading updates/assets
 class UpdateHandler {
 	__new(download_url, script_name:="DefaultScriptName", display_name:="DefaultDisplayName"){
 		; build variables and set defaults
@@ -171,6 +184,7 @@ class UpdateHandler {
 	}	
 }
 
+; class for translating strings into their NatoPhonetic read-out sounds
 class NatoDict {
 	__init(){
 
@@ -891,9 +905,13 @@ class ConfigEntry {
 	}
 } 
 
+; Class for managing/saving/loading/referencing settings & configurations with a built in GUI for exposing them to the user
 class ConfigManagerTool {
+	; Class for managing/saving/loading/referencing settings & configurations with a built in GUI for exposing them to the user
+	; - file_name (String) The filename or fullpath of the ini file you'd like to use
+	; - custom_section (String) The name of the ini header/section to save it's data in 
+	; - client_name (String) The name of the window you are targeting "ahk_exe" form recommended 
 	__new(file_name:=0, custom_section:=0, client_name:=0){
-
 		;sets default for custom section is != 0
 		((file_name)?(this.fn:=file_name):(this.fn:=CFG_PATH))					;accepts custom name or uses normal
 		((custom_section)?(this.section:=custom_section):(this.section:="ConfigManager"))
@@ -908,10 +926,11 @@ class ConfigManagerTool {
 		this.load_all()
 	}
 
+	; Method to changes the value of a single ConfigEntry object (with the flag to update hotkey too)
+	; - config_entry (Class ConfigEntry) the entry from CfgMgr you want to update
+	; - callback_func (FuncObject) the function you want to have called if any when complete
+	; - - callback_func **MUST** support a positional variable of String type containing new value
 	change_single_variable(config_entry, callback_func := False){
-		; changes the value of a single ConfigEntry (with the flag to update hotkey too)
-		; Callback_Func can be specified to be called after success/okay with the new value passed as a result
-		; callback_func.call(new_value)
 		desired_hotkey := Inputbox("Set new value for '" config_entry.key "'. `nExtra: " config_entry.info)
 		if desired_hotkey.result = "OK"{
 			log("INFO:User updated value of '" config_entry.key "' to '" desired_hotkey.value "'")
@@ -926,29 +945,37 @@ class ConfigManagerTool {
 		}
 	}
 
+	; Method for triggering an info popup that displays the assigned help/about string if any exists
+	; - gui_obj (GUIObjectHWD) The GUI object handle of the desired help string to be displayed
+	; - - Also accepts the string name of the variable
 	info(gui_obj, assist:=""){
+		; check for GUIObj
+		var_name := gui_obj
+		if type(gui_obj) != "String"
+			var_name := gui_obj.Name
 		try{
-			MsgBox this.c%assist%[substr(gui_obj.Name,5)].info, "About " gui_obj.Name 	;simple wrapper for info popup with key's info map data
+			MsgBox this.c%assist%[substr(var_name,5)].info, "About " var_name 	;simple wrapper for info popup with key's info map data
 		}catch any as e{
 			;any exeption will result in default no-info-msgbox
 			MsgBox "Sorry, no info avaliable for " substr(gui_obj.Name,5), "Missing Info"
 		}
 	}	
 
-	_unbind(key_name,func_name:=""){
+	; Internal method used to unbind any hotkey, for safety mostly
+	; - hotkey_str (String) hotkey string that needs to be disabled
+	; - func_name (not in use)
+	_unbind(hotkey_str,func_name:=""){
 		try{
-			log("SPAM:Unbinding '" key_name "'")
-			Hotkey key_name, "off"
+			log("SPAM:Unbinding '" hotkey_str "'")
+			Hotkey hotkey_str, "off"
 		}
 	}
 	
+	; This method is called to bind keys in general 
+	; - key_name (STRING) containing name of desired hotkey
+	; - func_name (STRING) containing name of function
+	; - always_on (BOOL) used to enable this hotkey outside of normal application context		
 	_bind(key_name, func_name, always_on:= 0){
-		; This method is called to bind keys in general 
-		; INPUT:
-		; - key_name (STRING) containing name of desired hotkey
-		; - func_name (STRING) containing name of function
-		; - always_on (BOOL) used to enable this hotkey outside of normal application context		
-		
 		; just to be safe we unbind first
 		try
 			this._unbind(key_name)
@@ -996,6 +1023,7 @@ class ConfigManagerTool {
 		}
 	}
 
+	; Method used to turn off all hotkeys currently listed in this(current CfgMgr)
 	unbind_all(){
 		for key, obj in this.c{
 			try{
@@ -1003,13 +1031,15 @@ class ConfigManagerTool {
 					this._unbind(obj.value)
 			}catch any as e{
 				CULErrorHandler(e,"unbinding error 332")
+				log("ERR:" e.Message "==>unbinding error 332")
 				IniDelete this.fn, this.section , key
 			}
 		}
 	}
 
+	; Method used for added a new variable using a GUI during runtime
+	; - custom_section (String) Name of the ini Header/Section to save the variable into
 	gui_add(custom_section:=0){
-		;create a large window with all possible settings
 		this.gui := gui(" -MinimizeBox -DPIScale","Settings Manager")
 		this.gui.setfont("c00cccc s" round(GUI_FONT_SIZE*0.8) " q3", "Terminal")				; new gui style with gray and teal	
 		this.gui.BackColor := "666666"								; gray bg for gui
@@ -1019,6 +1049,9 @@ class ConfigManagerTool {
 		this.gui.show()
 	}
 
+	; Method to build and display primary settings window GUI
+	; - **Script is SUSPENDED until GUI is closed**	
+	; - *Can be called directly from SysTray
 	gui_open(*){	
 		log("ALERT:SUSPENDING SCRIPT")
 		Suspend 1
@@ -1516,6 +1549,7 @@ class Tool {
 		    this.sx2 := coords[3] 	;fill prop info from results for partent caller to use
 		    this.sy2 := coords[4]	;fill prop info from results for partent caller to use   
 		}	
+
 		_screen_to_client(coords){	;take current screen/window info and converts to client coodemode from screen
 			WinGetClientPos &X, &Y, &Width, &Height, "A"	;use active window, assuming it's the right one
 			this.x := x
@@ -1523,7 +1557,7 @@ class Tool {
 			this.w := width
 			this.h := height
 
-			ToolTip "client " x ":" y "   " width "x" height "`n" coords[1] ":" coords[2] "`n" coords[1]-x ":" coords[2]-y
+			log("DEBUG:Tool.Mouse._screen_to_client() " x ":" y "   " width "x" height "`n" coords[1] ":" coords[2] "`n" coords[1]-x ":" coords[2]-y)
 
 		    this.cx1 := coords[1]-x 	;fill prop info from results for partent caller to use
 		    this.cy1 := coords[2]-y 	;fill prop info from results for partent caller to use
@@ -1544,11 +1578,9 @@ class Tool {
 			}
 
 			get(){
-				; ToolTip "STARTING pixel"
 
 				MouseGetPos &x1, &y1
 				this.color := PixelGetColor(x1, y1, "alt")
-				; ToolTip this.color 
 				this.info := Tool.highlight("temp_pixel", [x1,y1], this.color,,1)
 				this.info.show()
 			    this.x1 := x1
@@ -2041,6 +2073,9 @@ class ScenarioDetector {
 		this.hud_obj.show()		
 	}
 
+	; PRIMARY Method to check if the desired senario is present
+	; - variation (Integer) Value from 0-255 of variation from the sample that is an acceptible match
+	; - visual (Bool) Toggle to show visual feedback (search area, found location, etc)
 	is_present(variation:=-1, visual:=1, length_to_show:=250, refine_array:=0){
 		this.last_coords := 0  ; reset to avoid false positive
 		if variation <0
@@ -2057,8 +2092,7 @@ class ScenarioDetector {
 										   this.y2,
 										   variation,
 										   this.scale)
-			if this.last_coords != 0
-			{
+			if this.last_coords != 0 {
 				this.x := this.last_coords[1]
 				this.y := this.last_coords[2]
 				this.update_last_seen()
@@ -2196,14 +2230,13 @@ class ScenarioDetector {
 			}catch any as e{
 				; msgbox "catching: " e.message
 				if e.message == "KEY_ERROR"{	;KEY_ERROR is a custom err thrown when no value found for key
-					if LOG_LEVEL 
-						ToolTip e.extra " => " e.message
+					log("INFO: " this.hrid " has incomplete/corrupt saved data. Prompting for re-picking. " e.extra " => " e.message)
 					if this.type == "pixel" or this.type == "pixel_ext"{
-						disp("No config detected, please select a pixel for '" this.hrid "' now.",,,0)
+						disp("Please click on a pixel to sample for '" this.hrid "' now.",,,0)
 						this.picker("pixel")
 					}
 					if this.area_flag and !this.prop["x2"]{
-						disp("No config detected, please drag-select an area for '" this.hrid "' now.",,,0)
+						disp("Please drag-select an area to search for '" this.hrid "' now.",,,0)
 						this.picker("area")
 					}
 				}
@@ -2269,12 +2302,10 @@ class ScenarioDetector {
 
 		this._refine_coords([[temp.x,temp.y],[temp.w,temp.h]])	;feed getclientpos stuff from temp so we don't do it twice
 
-		disp("'" this.hrid "' area selected")
+		disp("Search area ('" this.hrid "') defined")
+		log("INFO: Area for '" this.hrid "' selected: 		" temp.x ":" temp.y "	" temp.w ":" temp.h)
 		this.show_coords()
 		this.save_all()
-
-		; if DEBUG
-		; 	ToolTip "received " temp.x1 ":" temp.y1 " to " temp.x2 ":" temp.y2
 	}
 
 	_grab_pixel_info(){
@@ -2286,6 +2317,7 @@ class ScenarioDetector {
 		this.prop["color_target"] := temp.color
 
 		disp("'" this.hrid "' pixel selected")
+		log("INFO: Pixel for '" this.hrid "' selected: 		" temp.x1 ":" temp.y1 "	" temp.color "	||" this.client_name)
 		this.save_all()
 	}
 
@@ -2315,18 +2347,14 @@ class ScenarioDetector {
 			this.area_flag := 1
 
 
-			this.load()		;load info from ini file
+			this.load()				;load info from ini file
 			this._refine_coords()	;take loaded info and translate into coords used for SCREEN based stuff
 
 			; try{
 				; TODO remove IMFV and use GUI creation https://www.autohotkey.com/boards/viewtopic.php?f=6&t=3806
 				
-				; if DEBUG
-				; 	MsgBox "File: " a_workingdir this.file_name "`nExist: " FileExist( a_workingdir this.file_name) "(letters for Attributes = yes)"
-				; to get dimentions
-				if !FileExist(a_workingdir this.file_name)
-					MsgBox "Image file appear to be missing from path below. You might need to reinstall CARKA or ask for info in Discord `n`n" a_workingdir this.file_name
-					; throw TargetError("Missing image file", a_workingdir this.file_name " (NOT FOUND) ", a_workingdir this.file_name)
+				if !FileExist(this.file_name)
+					MsgBox "Image file appear to be missing from path below. You might need to download the required imgPack from www.chipy.dev `n`n" a_workingdir this.file_name
 
 				this.imagetool := imagetool()									;build obj for image tool
 
@@ -3102,6 +3130,7 @@ class ImageTool{
 		this.find_image(LFN,x1, y1, x2, y2, LocalTol, scaler)	;simple alias
 	}
 
+	; Method & Function to search for an image with 0,0,0 (black) considered transparant 
 	static find_image(LFN,x1:="None", y1:="None", x2:="None", y2:="None", LocalTol:=100, scaler:=0){
 		; handles defaults
 		(x1=="None")?(x1:=0):x1:=x1  ; if x1 = none set to 0 else  leave it
@@ -3138,6 +3167,8 @@ class ImageTool{
 			}else if FileExist(this.wd "\" given_file_name){
 				msgbox "SHOLD NEVER SEE THIS PLEASE DELETE LINE"
 				full_image_path := this.wd "\" given_file_name
+			}else{
+				throw OSError("Image file not found","Image file not found", "PATH::" given_file_name)
 			}
 
 			; uses IRFV to get info about an images's size
@@ -3170,8 +3201,8 @@ class ImageTool{
 			msgbox "PropertyError in get_image_size(" given_file_name "):`n" full_image_path "`n`nM:" e.message "`nL:" e.file ":" e.line "`nE:" e.extra 
 
 		}catch any as e{
-			msgbox "DIRECT ERROR:`n" e.message " " e.line "`n" type(e)
-			throw TypeError("Trouble getting dimentions for " this.file_name, "path:" a_workingdir this.file_name, "dimentions:" this.dimentions )
+			msgbox "DIRECT ERROR:`n" e.message " L:" e.line "`n" type(e)
+			throw TypeError("Trouble getting dimentions for " given_file_name, "path:" a_workingdir given_file_name)
 		}	
 	}
 
