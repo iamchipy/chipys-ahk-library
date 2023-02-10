@@ -2208,7 +2208,7 @@ class ScenarioDetector {
 			if (type(halting_function) = "func"){
 				halt_flag:= halting_function.call()
 				if halt_flag
-					return True
+					return False
 			}
 
 			; check for display/silence
@@ -2225,6 +2225,7 @@ class ScenarioDetector {
 		}
 		return False
 	}
+
 	_wipe(){
 		;wipe entire save section, likely to force reselections of stuff
 		Inidelete(A_WorkingDir "/" CFG_PATH, this.id)
