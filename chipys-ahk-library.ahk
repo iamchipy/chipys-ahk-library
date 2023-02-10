@@ -31,13 +31,13 @@ CoordMode "ToolTip", "Screen"
 ; CONSTANTS with defaults, expected to be overwritten by scripts
 ;=======================================================
 /*
-||0-0[SPAM]Spam messages just to report everything
-||1-2[DEBUG]Debugging info for detailed reports on things
-||3-4[INFO]Info for verbose reports even a user might read
-||5-6[WARN]Warnings for things a user might need to know are important
-||7-8[ALERT]Alerts for when you ned to let the user know something is WRONG or failed
-||9-9[ERR]Error reports (critical possible even terminatino/crash levels)
-||+10[REPORT]Forced display for things that just need to be logged always
+- 0-0[SPAM]		Spam messages just to report everything
+- 1-2[DEBUG]	Debugging info for detailed reports on things
+- 3-4[INFO]		Info for verbose reports even a user might read
+- 5-6[WARN]		Warnings for things a user might need to know are important
+- 7-8[ALERT]	Alerts for when you ned to let the user know something is WRONG or failed
+- 9-9[ERR]		Error reports (critical possible even terminatino/crash levels)
+- +10[REPORT]	Forced display for things that just need to be logged always
 */
 global LOG_LEVEL := 5 
 global SCRIPT_NAME := "DefaultChipysUtilityLibraryName"
@@ -54,7 +54,6 @@ APP_VERSION := "0.0.1", unused := "custom var"
 ;@Ahk2Exe-SetOrigFilename chipys-ahk-library.ahk
 ;@Ahk2Exe-SetMainIcon     chipys-ahk-library.ico
 ;@Ahk2Exe-Base 			  Unicode 64-bit.bin
-
 
 ;=======================================================
 ; variables for predefined HUD objects
@@ -2069,49 +2068,6 @@ class ScenarioDetector {
 			Return [coord_pair[1]+this.target_window_width,coord_pair[2]+this.target_window_height,coord_pair[3]+this.target_window_width,coord_pair[4]+this.target_window_height] 			
 	}
 
-	_wipe(){
-		;wipe entire save section, likely to force reselections of stuff
-		Inidelete(A_WorkingDir "/" CFG_PATH, this.id)
-		sleep 100
-	}
-
-	_save_prop(prop_name){
-		log("DEBUG:ScenarioDetector:_save_prop() for id '" this.id "' " prop_name "[" this.prop[prop_name] "]")
-		IniWrite(this.prop[prop_name], CFG_PATH, this.id, prop_name)
-	}
-
-	_load_prop(prop_name){
-		; being replaced by _load_ini_section()
-		; sub-method to read in a single key//value pair
-		temp := iniread(CFG_PATH, this.id, prop_name, "KEY_ERROR")
-		log("SPAM:_load_prop('" this.hrid "')	|" temp "| of type " type(temp) " into '" prop_name "'")
-		if temp == "KEY_ERROR" or temp == "FFFFFF"{
-			; custom fail-case for when there is missing data in the ini - functioning like a return False with a catch
-			throw { message: "KEY_ERROR", what:  A_WorkingDir "/" prop_name, extra: "_load_prop('" prop_name "') for '" this.hrid "' not found in ini file"}
-		}
-		this.prop[prop_name] := temp
-	}
-
-	;Method to load any/all data in the section matching this.id should it exist
-	_load_ini_section(){
-		try{
-			ini_section := iniread(CFG_PATH, this.hrid)
-			
-			loop parse, ini_section, "`n", "`r" {
-				line:= StrSplit(A_LoopField, "=")
-				key:=line[1]
-				val:=line[2]
-	
-				log("SPAM:_load_ini_section('" this.hrid "') Reading " type(val) " into '" key "' with value 			|" val "|")
-				this.prop[key] := val
-			}
-			return True
-		}catch any as e{
-			log("WARN:_load_ini_section('" this.hrid "') Failed to read data:==> " type(e) "	|'" e.message "'|" e.what "|")
-			return False
-		}
-	}
-
 	show_coords(length_to_show:=1000, live_mode:=0){
 		if live_mode								;not the case by default only an option for specifically shows what is live with direct call by
 		    this.last_coords := this.is_present() 	;forcing it to run, is present check first to fill the data of current screen 
@@ -2246,15 +2202,70 @@ class ScenarioDetector {
 	; - silent_mode (Bool) Toggle to display current status or not
 	wait_for(timeout_sec := 30, halting_function:=0, interval_ms := 500, silent_mode := False){
 		start_tick := A_TickCount
-		while (!halting_function) and ((A_TickCount-start_tick)<(timeout_sec*1000)){
+
+		while (A_TickCount-start_tick)<(timeout_sec*1000){
+			; start by checking for the halting state
+			if (type(halting_function) = "func"){
+				halt_flag:= halting_function.call()
+				if halt_flag
+					return True
+			}
+
+			; check for display/silence
 			if !silent_mode
 				disp("Waiting for " this.hrid "	" (A_TickCount-start_tick)//1000 "	")
 			log("SPAM: ScenarioDetector.wait_for(" this.hrid ") loop:	" A_Index "||T:		" (A_TickCount-start_tick)//1000 "s")
+
+			; return true if present
 			if this.is_present()
 				return True
-			baseline_sleep_time(interval_ms, halting_function)
+
+			; delay before next loop
+			baseline_sleep_time(interval_ms, halt_flag)
 		}
 		return False
+	}
+	_wipe(){
+		;wipe entire save section, likely to force reselections of stuff
+		Inidelete(A_WorkingDir "/" CFG_PATH, this.id)
+		sleep 100
+	}
+
+	_save_prop(prop_name){
+		log("DEBUG:ScenarioDetector:_save_prop() for id '" this.hrid "' " prop_name "[" this.prop[prop_name] "]")
+		IniWrite(this.prop[prop_name], CFG_PATH, this.hrid, prop_name)
+	}
+
+	_load_prop(prop_name){
+		; being replaced by _load_ini_section()
+		; sub-method to read in a single key//value pair
+		temp := iniread(CFG_PATH, this.id, prop_name, "KEY_ERROR")
+		log("SPAM:_load_prop('" this.hrid "')	|" temp "| of type " type(temp) " into '" prop_name "'")
+		if temp == "KEY_ERROR" or temp == "FFFFFF"{
+			; custom fail-case for when there is missing data in the ini - functioning like a return False with a catch
+			throw { message: "KEY_ERROR", what:  A_WorkingDir "/" prop_name, extra: "_load_prop('" prop_name "') for '" this.hrid "' not found in ini file"}
+		}
+		this.prop[prop_name] := temp
+	}
+
+	;Method to load any/all data in the section matching this.id should it exist
+	_load_ini_section(){
+		try{
+			ini_section := iniread(CFG_PATH, this.hrid)
+			
+			loop parse, ini_section, "`n", "`r" {
+				line:= StrSplit(A_LoopField, "=")
+				key:=line[1]
+				val:=line[2]
+	
+				log("SPAM:_load_ini_section('" this.hrid "') Reading " type(val) " into '" key "' with value 			|" val "|")
+				this.prop[key] := val
+			}
+			return True
+		}catch any as e{
+			log("WARN:_load_ini_section('" this.hrid "') Failed to read data:==> " type(e) "	|'" e.message "'|" e.what "|")
+			return False
+		}
 	}
 
 	save_all(){
@@ -2300,7 +2311,7 @@ class ScenarioDetector {
 
 		; now we take actions accordingly
 		if is_data_missing or to_run_reselect {
-			log("INFO: " this.hrid " has incomplete/corrupt saved data.")
+			log("INFO: '" this.hrid "' has incomplete/corrupt saved data.")
 			return False
 		}
 		return True
@@ -2386,7 +2397,6 @@ class ScenarioDetector {
 			}else{
 				this.prop["target_window"]:= "AHK_exe " WinGetProcessName("A")
 			}
-
 			
 			this.file_name := file_name
 			this.hrid := StrSplit(StrSplit(file_name , ".")[1] , "\")[-1]  ; human readable ID
@@ -2395,8 +2405,12 @@ class ScenarioDetector {
 			this.force_reselection := force_reselection
 			this.area_flag := 1  	;used by parent structure to know if class is doing area functions
 			
+			; Announce to user we have started
+			disp("Constructing '" this.hrid "' . . .", 2)
+
 			; now we load in and saved data and if there is none we prompt user for definition
-			this.load()
+			if !this.load()
+				this.picker()
 			
 			;take loaded info and translate into coords used for SCREEN based stuff
 			this._update_target_window_info()
@@ -3752,6 +3766,7 @@ find_image(LFN,x1:="None", y1:="None", x2:="None", y2:="None", LocalTol:=100, sc
 
 disp(  activity:="", index:=1, to_hide:=0, duration:=5000){
 	;simple wrapper to short function name
+	log("SPAM:DISP::	" activity)
 	on_screen_feedback_line(activity,index,to_hide,duration)
 }
 
@@ -4341,8 +4356,6 @@ clear_tooltips(tooltip_index_to_clear:=-1){
 	}
 }
 
-
-
 /*
 [][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][]
 [][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][]
@@ -4357,12 +4370,17 @@ fancy_sleep(ms_to_sleep_for, halting_flag:=false){
 	; sleepin in 200ms chunks until remaining sleep time is less than 200 and sets a final timer
 	wake_target_in_system_ticks := A_TickCount+ms_to_sleep_for
 	loop{
+		; handle when halting_flag is a function
+		if (type(halting_flag) = "func")
+			if (halting_flag.call() = True)
+				break
+
 		if mod((wake_target_in_system_ticks-A_TickCount),200)>1{
 			sleep 200
 		}else{
 			sleep(wake_target_in_system_ticks-A_TickCount)
 		}
-	}until((wake_target_in_system_ticks-A_TickCount)<1 or halting_flag)	
+	}until((wake_target_in_system_ticks-A_TickCount)<1)	
 }
 
 baseline_sleep_time(ms_to_sleep_for:=1, halting_flag:=false, base_delay_time:=100){
@@ -4384,7 +4402,7 @@ baseline_sleep_time(ms_to_sleep_for:=1, halting_flag:=false, base_delay_time:=10
 	}
 }
 
-bst(ms_to_sleep_for:=1, &halting_flag:=false, base_delay_time:=100){
+bst(ms_to_sleep_for:=1, halting_flag:=false, base_delay_time:=100){
 	; alias for baseline_sleep_time(ms_to_sleep_for:=1, halting_flag:=false, base_delay_time:=100)
 	baseline_sleep_time(ms_to_sleep_for, halting_flag, base_delay_time)
 }
