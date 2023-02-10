@@ -1557,7 +1557,7 @@ class Tool {
 			this.w := width
 			this.h := height
 
-			log("DEBUG:Tool.Mouse._screen_to_client() " x ":" y "   " width "x" height "`n" coords[1] ":" coords[2] "`n" coords[1]-x ":" coords[2]-y)
+			log("DEBUG:Tool.Mouse._screen_to_client() " x ":" y "   Win:" width "x" height "	||" coords[1] ":" coords[2] "	||" coords[1]-x ":" coords[2]-y)
 
 		    this.cx1 := coords[1]-x 	;fill prop info from results for partent caller to use
 		    this.cy1 := coords[2]-y 	;fill prop info from results for partent caller to use
@@ -1943,6 +1943,7 @@ class ScenarioDetector {
 		this.prop["search_y1"] := 0	;y of first (upper left) coord for area to search [based on client coordmode]
 		this.prop["search_x2"] := 0 	;x of second (lower right) coord for area to search [based on client coordmode]
 		this.prop["search_y2"] := 0	;x of second (lower right) coord for area to search [based on client coordmode]
+		this.prop["target_window"] := 0
 
 		;live properties used for manipulation and based on SCREEN for gui/hud accuracy
 		this.x := 0		;x of (last) found location of scenario
@@ -1950,16 +1951,20 @@ class ScenarioDetector {
 		this.x1 := 0	;x of first (upper left) coord for area to search [based on SCREEN coordmode]
 		this.y1 := 0	;y of first (upper left) coord for area to search [based on SCREEN coordmode]
 		this.x2 := 0 	;x of second (lower right) coord for area to search [based on SCREEN coordmode]
-		this.y2 := 0	;x of second (lower right) coord for area to search [based on SCREEN coordmode]		
-		this.target_window_width := A_ScreenWidth							;width of client (default assumes fullscreen)
-		this.target_window_height := A_ScreenHeight 						;hieght of client (default assumes fullscreen)			
-
+		this.y2 := 0	;x of second (lower right) coord for area to search [based on SCREEN coordmode]	
+		
+		; variables to store window info
+		this.target_window_x := 0 							;x of client (default assumes fullscreen)			
+		this.target_window_y := 0 							;y of client (default assumes fullscreen)	
+		this.target_window_width := A_ScreenWidth			;width of client (default assumes fullscreen)
+		this.target_window_height := A_ScreenHeight 		;hieght of client (default assumes fullscreen)			
+		
 		;define blank variable that might be used by class or child classes 
 		this.color_mark := "00FF00"
 		this.prop["color_target"] := "FFFFFF"
 		this.hide_timer := objbindmethod(this, "hide_coords")
 		this.display_time := 500					;default time for search box to show
-		this.last_coords := 0
+		this.last_coords := 0  ; Variable to temporarily store found location
 		this.coords:=0
 		this.showing_search_area := 0
 		this.mode := "base"
@@ -1985,50 +1990,32 @@ class ScenarioDetector {
 
 	}
 
-	; Method to update search area/space with new window-origin info (AKA converting ClientMode coords to ScreenMode coords)
-	; - new_search_area_array (Array) Requires 4x Int values x1,y,x2,y2 forming the box of the search area to be modified
-	; - xy_origin_array (Array) Accepts a 2x Int array representing the X&Y coords to use as target_window_origin (AKA offset)
-	_update_search_area(new_search_area_array, xy_origin_array:=0){
-		if xy_origin_array
-			this.update_offset(xy_origin_array)
-		this.x1 := new_search_area_array[1] + this.target_window_width
-		this.y1 := new_search_area_array[2] + this.target_window_height
-		this.x2 := new_search_area_array[3] + this.target_window_width
-		this.y2 := new_search_area_array[4] + this.target_window_height
-	}
-
 	; Method used to update this Object Instance's info about the target window (either live-pulling the info or via input)
 	; - xywh_info_array (Array) Accepts array of 4x Int representing window info x,y,w,h
 	_update_target_window_info(xywh_info_array:=0){
-		if !WinExist(this.client_name){
-			disp("'" this.hrid "' could not find target window")
-			Return
-		}
-		; xywh_info_array -> [[win-x,win-y],[win-w,win-h]]
-		if !xywh_info_array{					;if we weren't given info try get it from client window
-			WinGetClientPos &X, &Y, &Width, &Height, this.client_name	
-			xywh_info_array := [X,Y,Width,height]	
-		}
-		
-		this.update_offset([xywh_info_array[1],xywh_info_array[2]])			;update the object's current offset prop (to be saved)
-		this.update_win([xywh_info_array[3],xywh_info_array[4]])				;update the object's current window dimentions prop (to be saved)
-	}
 
-	; Method to t?
-	_refine_coords(){ ;update offset/win(xywh_info_array) & 'live' with prop[]ratios+offset
-		
-		;converts client coords (sample) to client coords current res
-		temp_coords :=[this.prop["search_x1"],this.prop["search_y1"],this.prop["search_x2"],this.prop["search_y2"]]
-		recaled_search_area := coord_pair_rescale_for_new_res(	temp_coords,
-																[this.prop["sample_window_width"],this.prop["sample_window_height"]])
-		this._update_search_area(recaled_search_area, xy_origin_array:=0) 
+		if !xywh_info_array {
+			if !WinExist(this.prop["target_window"]){
+				log("ALERT:ScenarioDetector._update_target_window_info: Unable to find '" this.prop["target_window"] "' window. No info updated")
+				disp("'" this.hrid "' could not find target window")
+				Return
+			}
+			WinGetClientPos &X, &Y, &W, &H, this.prop["target_window"]	
+			xywh_info_array := [X,Y,W,H]
+		}
+
+		this.target_window_x := xywh_info_array[1]
+		this.target_window_y := xywh_info_array[2]
+		this.target_window_width := xywh_info_array[3]
+		this.target_window_height:= xywh_info_array[4]
+		log("DEBUG:ScenarioDetector._update_target_window_info: '" this.prop["target_window"] "' window @ [" xywh_info_array[1] "," xywh_info_array[2] "," xywh_info_array[3] "," xywh_info_array[4] "]")
 	}
 
 	_client_to_screen(coord_pair){
 		if coord_pair.Length == 2
-			Return [coord_pair[1]+this.prop["sample_window_x"],coord_pair[2]+this.prop["sample_window_y"]] 
+			Return [coord_pair[1]+this.target_window_width,coord_pair[2]+this.target_window_height] 
 		if coord_pair.Length == 4
-			Return [coord_pair[1]+this.prop["sample_window_x"],coord_pair[2]+this.prop["sample_window_y"],coord_pair[3]+this.prop["sample_window_x"],coord_pair[4]+this.prop["sample_window_y"]] 			
+			Return [coord_pair[1]+this.target_window_width,coord_pair[2]+this.target_window_height,coord_pair[3]+this.target_window_width,coord_pair[4]+this.target_window_height] 			
 	}
 
 	_wipe(){
@@ -2038,7 +2025,7 @@ class ScenarioDetector {
 	}
 
 	_save_prop(prop_name){
-		log("DEBUG:ScenarioDetector:_save_prop(" prop_name ") for id '" this.id "' value[" this.prop[prop_name] "]")
+		log("DEBUG:ScenarioDetector:_save_prop() for id '" this.id "' " prop_name "[" this.prop[prop_name] "]")
 		IniWrite(this.prop[prop_name], CFG_PATH, this.id, prop_name)
 	}
 
@@ -2057,20 +2044,21 @@ class ScenarioDetector {
 	;Method to load any/all data in the section matching this.id should it exist
 	_load_ini_section(){
 		try{
-			ini_section := iniread(CFG_PATH, this.id)
-			loop ini_section.length {
-				line:= StrSplit(ini_section[A_Index], "=")
+			ini_section := iniread(CFG_PATH, this.hrid)
+			
+			loop parse, ini_section, "`n", "`r" {
+				line:= StrSplit(A_LoopField, "=")
 				key:=line[1]
 				val:=line[2]
 	
-				log("SPAM:_load_prop('" this.hrid "')	|" val "| of type " type(val) " into '" key "'")
+				log("SPAM:_load_ini_section('" this.hrid "') Reading " type(val) " into '" key "' with value 			|" val "|")
 				this.prop[key] := val
 			}
 		}
 	}
 
 	show_coords(length_to_show:=1000, live_mode:=0){
-		if live_mode			;not the case by default only an option for specifically shows what is live with direct call by
+		if live_mode								;not the case by default only an option for specifically shows what is live with direct call by
 		    this.last_coords := this.is_present() 	;forcing it to run, is present check first to fill the data of current screen 
 
 		; if we are searching a single pixel or have last_seen data, we show that
@@ -2089,10 +2077,10 @@ class ScenarioDetector {
 		coord_str := ""
 		loop display_coords.Length
 			coord_str .= display_coords[A_Index] " "
-		log("DEBUG:ScenarioDetector.show_coords: '" this.hrid "' LastSeen:		" this.x ":" this.y "		||in: " this.client_name "  ||area:" coord_str)
+		log("DEBUG:ScenarioDetector.show_coords: '" this.hrid "' LastSeen:		" this.x ":" this.y "		||in: " this.prop["target_window"] "  ||area:" coord_str)
 
 		;now make highlight with above 'dynamic' flexie vars
-		this.hud_obj := tool.highlight(	this.id, 
+		this.hud_obj := tool.highlight(		this.id, 
 											display_coords, 
 											display_color, 
 											length_to_show,
@@ -2112,7 +2100,7 @@ class ScenarioDetector {
 		; this._update_target_window_info(refine_array)
 		; this._refine_coords()
 
-		log("DEBUG:ScenarioDetector.is_present:type='" this.type "'==>'" this.hrid "'")
+		this._update_target_window_info()
 
 
 		if this.type = "image" {	
@@ -2128,13 +2116,15 @@ class ScenarioDetector {
 				this.y := this.last_coords[2]
 				this.update_last_seen()
 				log("DEBUG:ScenarioDetector.is_present==> Found '" this.hrid "' at " this.x ":" this.y)
-				if visual
-					this.show_coords(length_to_show)	
+				if visual{
+					this.show_coords(length_to_show)
+				}	
 				Return 1
 			}
 			log("DEBUG:ScenarioDetector.is_present==> '" this.hrid "' currently FALSE ")
-			if visual
-				this.show_coords(length_to_show)				
+			if visual{
+				this.show_coords(length_to_show)	
+			}			
 			Return 0
 		}
 
@@ -2195,6 +2185,24 @@ class ScenarioDetector {
 		}
 	}	
 
+	; PRIMARY Method used to loop in a holding pattern waiting for scenario to become present
+	; - timeout (Integer) Time in Seconds to wait for this scenario (0=infinite wait time)
+	; - halting_function (Bool/Func) A variable or function that returns true should this wait loop need to be terminated
+	; - interval (Integer) Time in Milliseconds to wait inbetween each check
+	; - silent_mode (Bool) Toggle to display current status or not
+	wait_for(timeout_sec := 30, halting_function:=0, interval_ms := 500, silent_mode := False){
+		start_tick := A_TickCount
+		while (!halting_function) and ((A_TickCount-start_tick)<(timeout_sec*1000)){
+			if !silent_mode
+				disp("Waiting for " this.hrid "	" (A_TickCount-start_tick)//1000)
+			log("SPAM: ScenarioDetector.wait_for(" this.hrid ") loop:	" A_Index "||T:		" (A_TickCount-start_tick)//1000 "ms")
+			if this.is_present()
+				return True
+			baseline_sleep_time(interval_ms, halting_function)
+		}
+		return False
+	}
+
 	save_all(){
 		;alias for save to be consistant with other objs 
 		this.save()
@@ -2202,21 +2210,15 @@ class ScenarioDetector {
 
 	save(){
 		this._save_prop("color_target")
-
+		this._save_prop("target_window")
 		this._save_prop("last_seen_x")
 		this._save_prop("last_seen_y")
 		this._save_prop("search_x1")
 		this._save_prop("search_y1")
 		this._save_prop("search_x2")
 		this._save_prop("search_y2")	
-
-		this._save_prop("sample_window_x")
-		this._save_prop("sample_window_y")	
 		this._save_prop("sample_window_width")
 		this._save_prop("sample_window_height")
-		; this._save_prop("target_window_width")
-		; this._save_prop("target_window_height")
-
 	}	
 
 	; method to try read-in/load any saved data matching this instance from the ini
@@ -2233,7 +2235,7 @@ class ScenarioDetector {
 			; first case - check for forced reselection
 			if this.force_reselection{
 				this.force_reselection :=0 
-				throw ValueError("Custom Error to hide when hotkeys are deassigned", this.hrid "force_reselection image", " ")
+				throw Error("KEY_ERROR", this.hrid "force_reselection image", " ")
 			}
 
 			;if have info for secondary coord (aka part of area) then we must be good
@@ -2276,7 +2278,7 @@ class ScenarioDetector {
 			}
 		}
 
-		this.update_search_coords()
+		this._update_search_coords()
 	}	
 
 	update_last_seen(){
@@ -2286,32 +2288,54 @@ class ScenarioDetector {
 
 	;Method to refresh/updaate current coords (can be run without params to recalculate search-area considering window origin offset)
 	; - coords (Array) Expects array of 2/4x Int to update search coords
-	update_search_coords(coords:=0){		
+	_update_search_coords(coords:=0){	
+		; if not provided recalculate from know values
 		if !coords{
 			this._update_target_window_info()
-			this.x1 := this.prop["search_x1"] + this.target_window_width
-			this.y1 := this.prop["search_y1"] + this.target_window_height
-			this.x2 := this.prop["search_x2"] + this.target_window_width
-			this.y2 := this.prop["search_y2"] + this.target_window_height
+			this.x1 := this.prop["search_x1"] + this.target_window_x
+			this.y1 := this.prop["search_y1"] + this.target_window_y
+			this.x2 := this.prop["search_x2"] + this.target_window_x
+			this.y2 := this.prop["search_y2"] + this.target_window_y
+			log("DEBUG:ScenarioDetector._update_search_coords: " this.hrid "'	||area: " this.x1 ":" this.y1 " 	" this.x2 ":" this.y2)
 			Return
 		}
+		; else simply store provided values
+		this.x1 := coords[1]
+		this.y1 := coords[2]
+		if coords.Length = 4 {
+			this.x2 := coords[3]
+			this.y2 := coords[4]
+			log("DEBUG:ScenarioDetector._update_search_coords: " this.hrid "'	||area: " coords[1] ":" coords[2] " 	" coords[3] ":" coords[4])
+			Return
+		}
+		log("DEBUG:ScenarioDetector._update_search_coords: " this.hrid "'	||point: " coords[1] ":" coords[2])
+	}
+
+	;Method to rupdate coords that will be saved **SHOULD always be clientMode**
+	; - coords (Array) Expects array of 2/4x Int to update search coords
+	; - - BLANK coords will result in full size of primary monitor
+	_update_saved_coords(coords:=0){	
+		if !coords{
+			this.prop["search_x1"] := 0
+			this.prop["search_y1"] := 0
+			this.prop["search_x2"] := A_ScreenWidth
+			this.prop["search_y2"] := A_ScreenHeight
+			log("DEBUG:ScenarioDetector._update_saved_coords: " this.hrid "'	||area: 0:0 	" this.prop["search_x2"] ":" this.prop["search_y2"])
+			Return
+		}
+
+		
+		; simply store provided values
 		this.prop["search_x1"] := coords[1]
 		this.prop["search_y1"] := coords[2]
-		if coords.Length < 4
-			Return
-		this.prop["search_x2"] := coords[3]
-		this.prop["search_y2"] := coords[4]
-	}
-
-	update_offset(coords){ 		;used to update the offset/origin of client window
-		this.prop["sample_window_x"] := coords[1]
-		this.prop["sample_window_y"] := coords[2]
-	}
-
-	update_win(dimentions){		;used to update client window dimentions 
-		this.target_window_width := dimentions[1]
-		this.target_window_height := dimentions[2]
-	}
+		if coords.Length = 4 {
+			this.prop["search_x2"] := coords[3]
+			this.prop["search_y2"] := coords[4]
+			log("DEBUG:ScenarioDetector._update_saved_coords: " this.hrid "'	||area: " coords[1] ":" coords[2] " 	" coords[3] ":" coords[4])
+			return
+		}
+		log("DEBUG:ScenarioDetector._update_saved_coords: " this.hrid "'	||Point: " coords[1] ":" coords[2])
+	}	
 
 	get_age_in_ms(){
 		this.age_ms := a_tickcount - this.last_seen
@@ -2327,27 +2351,29 @@ class ScenarioDetector {
 		}			
 	}
 
+	; Internal Method for prompting and storing user's input about an area search space
 	_grab_area_info(){
-		area := tool.mouse.DragHighlight(this.client_name) 	
+		area := tool.mouse.DragHighlight(this.prop["target_window"]) 	
 		; wait for drag to complete
 		while !area.done
 			sleep 100
 		
-		this.update_search_coords([area.cx1,area.cy1,area.cx2,area.cy2]) ;copy results into props (client mode)
+		this._update_saved_coords([area.cx1,area.cy1,area.cx2,area.cy2]) ;copy results into props (client mode)
 		this.prop["sample_window_width"] := area.w 		;copy in the results from screen drag 	window info
 		this.prop["sample_window_height"] := area.h 		;copy in the results from screen drag 	window info
 
 		this._update_target_window_info([area.x,area.y,area.w,area.h])
-		this._refine_coords()	;feed getclientpos stuff from temp so we don't do it twice
+		this._update_search_coords()
 
 		disp("Search area ('" this.hrid "') defined")
-		log("INFO: Area for '" this.hrid "' selected: 		" area.x ":" area.y "	" area.w ":" area.h)
+		log("INFO: Area for '" this.hrid "' selected:ClientMode: 		" area.cx1 ":" area.cy1 "	" area.cx2 ":" area.cy2)
+
 		this.show_coords()
 		this.save_all()
 	}
 
 	_grab_pixel_info(){
-		temp := tool.mouse.pixel(this.client_name)
+		temp := tool.mouse.pixel(this.prop["target_window"])
 		while !temp.done
 			sleep 100
 		this.prop["last_seen_x"] := temp.x1
@@ -2355,7 +2381,7 @@ class ScenarioDetector {
 		this.prop["color_target"] := temp.color
 
 		disp("'" this.hrid "' pixel selected")
-		log("INFO: Pixel for '" this.hrid "' selected: 		" temp.x1 ":" temp.y1 "	" temp.color "	||" this.client_name)
+		log("INFO: Pixel for '" this.hrid "' selected: 		" temp.x1 ":" temp.y1 "	" temp.color "	||" this.prop["target_window"])
 		this.save_all()
 	}
 
@@ -2363,6 +2389,7 @@ class ScenarioDetector {
 		; IMG Class allowing for a picture to be found
 		; - file_name (String) Filename or full path of the sample with black as transparent 
 		; - search_area (Array) Area can be double-pair coords or area-preset-name String
+		; - force_reselection (Bool) Toggle to force the reselections of area and target window
 		; - variation (Integer) Value 0-254 of how much of a variation from the sample is considered a match
 		; - client_name (String) Target window title/name (AHK_exe recommended)
 		__New(file_name, search_area:=0, force_reselection:=0, variation:=50, client_name:=0) {
@@ -2378,11 +2405,12 @@ class ScenarioDetector {
 			; }	
 
 			if client_name{
-				this.client_name:=client_name
+				this.prop["target_window"]:=client_name
 			}else{
-				this.client_name:= "AHK_exe " WinGetProcessName("A")
+				this.prop["target_window"]:= "AHK_exe " WinGetProcessName("A")
 			}
 
+			
 			this.file_name := file_name
 			this.id := this.hrid := StrSplit(file_name , ".")[1]
 			this.tol := variation
@@ -2393,9 +2421,13 @@ class ScenarioDetector {
 			; now we load in and saved data and if there is none we prompt user for definition
 			this.load()
 			
-			log("DEBUG:ScenarioDetector.Img:Created:	'" this.hrid "'	||area:" this.x1 ":" this.y1 " " this.x2 ":" this.y2)
 			;take loaded info and translate into coords used for SCREEN based stuff
 			this._update_target_window_info()
+			this._update_search_coords()
+			
+			log("DEBUG:ScenarioDetector.Img:Created:	'" this.hrid "'	||target: '" this.prop["target_window"] "'	||area:" this.target_window_x ":" this.target_window_y " " this.target_window_width ":" this.target_window_height)
+			log("DEBUG:ScenarioDetector.Img:Created:	'" this.hrid "'	||search:" this.x1 ":" this.y1 " " this.x2 ":" this.y2)
+
 			; this._refine_coords()	
 
 			; ; try{
@@ -2437,7 +2469,7 @@ class ScenarioDetector {
 				; 	this.prop["ui_compensate"] := coords[3]		
 			}
 
-			((client_name)?(this.client_name:=client_name):(this.client_name:= "AHK_exe " WinGetProcessName("A")))
+			((client_name)?(this.prop["target_window"]:=client_name):(this.prop["target_window"]:= "AHK_exe " WinGetProcessName("A")))
 
 			if target_color
 				this.prop["color_target"] := target_color
@@ -2476,9 +2508,9 @@ class ScenarioDetector {
 				}
 				
 				if client_name{
-					this.client_name:=client_name
+					this.prop["target_window"]:=client_name
 				}else{
-					this.client_name:= "AHK_exe " WinGetProcessName("A")
+					this.prop["target_window"]:= "AHK_exe " WinGetProcessName("A")
 				}
 				((target_color)?(this.prop["color_target"] := target_color):(this.prop["color_target"] := "FFFFFF"))			
 
@@ -3180,29 +3212,38 @@ class ImageTool{
 	}
 
 	; Method & Function to search for an image with 0,0,0 (black) considered transparant 
-	static find_image(LFN,x1:="None", y1:="None", x2:="None", y2:="None", LocalTol:=100, scaler:=0){
+	static find_image(LFN,x1:="None", y1:="None", x2:="None", y2:="None", LocalTol:=50, scaler:=0){
 		; handles defaults
 		(x1=="None")?(x1:=0):x1:=x1  ; if x1 = none set to 0 else  leave it
 		(y1=="None")?(y1:=0):y1:=y1 
 		(x2=="None")?(x2:=A_ScreenWidth):x2:=x2 
 		(y2=="None")?(y2:=A_ScreenHeight):y2:=y2 
 
+		fn:=False
+		if FileExist(LFN)
+			fn := LFN
+		else if FileExist(SubStr(LFN, 2))
+			fn := SubStr(LFN, 2)
+		else if FileExist(A_WorkingDir LFN)
+			fn := A_WorkingDir LFN	
+
+		;MsgBox SubStr(LFN, 2) '`n'   LFN "`n" fn
 		Try
 		{	
 			if scaler{		;if scaler was given, then we need to do a modified image search
-				if(ImageSearch(&foundX, &foundY, x1,y1,x2,y2, "*TransBlack *" LocalTol " *w" Integer(scaler[1]) " *h-1 " SubStr(LFN, 2)))
+				if(ImageSearch(&foundX, &foundY, x1,y1,x2,y2, "*TransBlack *" LocalTol " *w" Integer(scaler[1]) " *h-1 " fn))
 				{	
 					Return [foundX, foundY]
 				}
 			}else{
-				if(ImageSearch(&foundX, &foundY, x1,y1,x2,y2, "*TransBlack *" LocalTol " " SubStr(LFN, 2)))
+				if(ImageSearch(&foundX, &foundY, x1,y1,x2,y2, "*TransBlack *" LocalTol " " fn))
 				{	
 					Return [foundX, foundY]
 				}	
 			}
 		}
 		catch any as exc
-	    	MsgBox "CUL:ERR: Could not image search:`n" exc.Message "`n" exc.what "`n`npossible causes:`n" "*TransBlack *" LocalTol " *h-1 *w" Integer(scaler[1]) " " SubStr(LFN, 2) "`nFile might be missing"
+	    	MsgBox "CUL:ERR: Could not image search:`n" exc.Message "`n" exc.what "`n`npossible causes:`n" "*TransBlack *" LocalTol " *h-1 *w" Integer(scaler[1]) " " fn "`nFile might be missing"
 		Return False
 	}
 
