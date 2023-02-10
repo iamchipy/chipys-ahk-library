@@ -1997,7 +1997,7 @@ class ScenarioDetector {
 		if !xywh_info_array {
 			if !WinExist(this.prop["target_window"]){
 				log("ALERT:ScenarioDetector._update_target_window_info: Unable to find '" this.prop["target_window"] "' window. No info updated")
-				disp("'" this.hrid "' could not find target window")
+				disp("'" this.hrid "' could not find '" this.prop["target_window"] "' window")
 				Return
 			}
 			WinGetClientPos &X, &Y, &W, &H, this.prop["target_window"]	
@@ -2009,6 +2009,57 @@ class ScenarioDetector {
 		this.target_window_width := xywh_info_array[3]
 		this.target_window_height:= xywh_info_array[4]
 		log("DEBUG:ScenarioDetector._update_target_window_info: '" this.prop["target_window"] "' window @ [" xywh_info_array[1] "," xywh_info_array[2] "," xywh_info_array[3] "," xywh_info_array[4] "]")
+	}
+
+	;Method to refresh/updaate current coords (can be run without params to recalculate search-area considering window origin offset)
+	; - coords (Array) Expects array of 2/4x Int to update search coords
+	_update_search_coords(coords:=0){	
+		; if not provided recalculate from know values
+		if !coords{
+			this._update_target_window_info()
+			this.x1 := this.prop["search_x1"] + this.target_window_x
+			this.y1 := this.prop["search_y1"] + this.target_window_y
+			this.x2 := this.prop["search_x2"] + this.target_window_x
+			this.y2 := this.prop["search_y2"] + this.target_window_y
+			log("DEBUG:ScenarioDetector._update_search_coords: '" this.hrid "'	||area: " this.x1 ":" this.y1 " 	" this.x2 ":" this.y2)
+			Return
+		}
+		; else simply store provided values
+		this.x1 := coords[1]
+		this.y1 := coords[2]
+		if coords.Length = 4 {
+			this.x2 := coords[3]
+			this.y2 := coords[4]
+			log("DEBUG:ScenarioDetector._update_search_coords: '" this.hrid "'	||area: " coords[1] ":" coords[2] " 	" coords[3] ":" coords[4])
+			Return
+		}
+		log("DEBUG:ScenarioDetector._update_search_coords: '1" this.hrid "'	||point: " coords[1] ":" coords[2])
+	}
+
+	;Method to rupdate coords that will be saved **SHOULD always be clientMode**
+	; - coords (Array) Expects array of 2/4x Int to update search coords
+	; - - BLANK coords will result in full size of primary monitor
+	_update_saved_coords(coords:=0){	
+		if !coords{
+			this.prop["search_x1"] := 0
+			this.prop["search_y1"] := 0
+			this.prop["search_x2"] := A_ScreenWidth
+			this.prop["search_y2"] := A_ScreenHeight
+			log("DEBUG:ScenarioDetector._update_saved_coords: " this.hrid "'	||area: 0:0 	" this.prop["search_x2"] ":" this.prop["search_y2"])
+			Return
+		}
+
+		
+		; simply store provided values
+		this.prop["search_x1"] := coords[1]
+		this.prop["search_y1"] := coords[2]
+		if coords.Length = 4 {
+			this.prop["search_x2"] := coords[3]
+			this.prop["search_y2"] := coords[4]
+			log("DEBUG:ScenarioDetector._update_saved_coords: " this.hrid "'	||area: " coords[1] ":" coords[2] " 	" coords[3] ":" coords[4])
+			return
+		}
+		log("DEBUG:ScenarioDetector._update_saved_coords: " this.hrid "'	||Point: " coords[1] ":" coords[2])
 	}
 
 	_client_to_screen(coord_pair){
@@ -2054,6 +2105,10 @@ class ScenarioDetector {
 				log("SPAM:_load_ini_section('" this.hrid "') Reading " type(val) " into '" key "' with value 			|" val "|")
 				this.prop[key] := val
 			}
+			return True
+		}catch any as e{
+			log("WARN:_load_ini_section('" this.hrid "') Failed to read data:==> " type(e) "	|'" e.message "'|" e.what "|")
+			return False
 		}
 	}
 
@@ -2065,7 +2120,7 @@ class ScenarioDetector {
 		if this.type == "pixel" or this.last_coords{				
 			display_coords := [this.x, this.y]
 			display_color := this.prop["color_target"]			
-		}else if this.type == "image" or this.type == "pixel_ext" { ; else if we are searching an area for either a pixel or image show that zone
+		}else if InStr(this.type, "image") or InStr(this.type, "pixel_ext") or InStr(this.type, "area") { ; else if we are searching an area for either a pixel or image show that zone
 			display_coords := [this.x1, this.y1, this.x2, this.y2]
 			display_color := this.color_mark			
 		}else if this.type == "cluster" {  							;if type is cluster we gotta feed it subpixel1's coords for search area
@@ -2080,7 +2135,7 @@ class ScenarioDetector {
 		log("DEBUG:ScenarioDetector.show_coords: '" this.hrid "' LastSeen:		" this.x ":" this.y "		||in: " this.prop["target_window"] "  ||area:" coord_str)
 
 		;now make highlight with above 'dynamic' flexie vars
-		this.hud_obj := tool.highlight(		this.id, 
+		this.hud_obj := tool.highlight(		this.hrid, 
 											display_coords, 
 											display_color, 
 											length_to_show,
@@ -2102,8 +2157,7 @@ class ScenarioDetector {
 
 		this._update_target_window_info()
 
-
-		if this.type = "image" {	
+		if InStr(this.type, "image") {	
 			this.last_coords := find_image(this.file_name,
 										   this.x1,
 										   this.y1,
@@ -2194,8 +2248,8 @@ class ScenarioDetector {
 		start_tick := A_TickCount
 		while (!halting_function) and ((A_TickCount-start_tick)<(timeout_sec*1000)){
 			if !silent_mode
-				disp("Waiting for " this.hrid "	" (A_TickCount-start_tick)//1000)
-			log("SPAM: ScenarioDetector.wait_for(" this.hrid ") loop:	" A_Index "||T:		" (A_TickCount-start_tick)//1000 "ms")
+				disp("Waiting for " this.hrid "	" (A_TickCount-start_tick)//1000 "	")
+			log("SPAM: ScenarioDetector.wait_for(" this.hrid ") loop:	" A_Index "||T:		" (A_TickCount-start_tick)//1000 "s")
 			if this.is_present()
 				return True
 			baseline_sleep_time(interval_ms, halting_function)
@@ -2226,115 +2280,35 @@ class ScenarioDetector {
 		
 		log("DEBUG:ScenarioDetector.load(): hrid='" this.hrid "' reading saved data..." ) 
 		;Load any data that might exist in ini
-		this._load_ini_section()
+		data_load_success := this._load_ini_section()
 
-		;TODO improve/recode how we validate loaded data and decide to redefine/pick scene
+		; new process is flag driven (breaking into many checks since it only runs at startup it's okay to re-double)
+		is_data_missing := True
+		to_run_reselect := True
 
-		; try load required data starting with most basic structure and advance
-		try{	
-			; first case - check for forced reselection
-			if this.force_reselection{
-				this.force_reselection :=0 
-				throw Error("KEY_ERROR", this.hrid "force_reselection image", " ")
-			}
+		; check if reselection flag is there or load failed
+		if !this.force_reselection and data_load_success
+			to_run_reselect := False
 
-			;if have info for secondary coord (aka part of area) then we must be good
-			if this.prop["search_x2"]	 	
-				Return
+		; check for area types
+		if  (InStr(this.type,"area")) and (this.prop["search_x2"] and this.prop["search_y2"]) 	
+			is_data_missing := False
 
-			;if have info for pixel's coord then we are good
-			if this.prop["last_seen_x"] and this.type == "pixel"
-				Return		
-			
-			; if we are still here we need to look as additional types:
-			this._load_prop("search_x1")			;load x1 -used in pixel/ext/img
-			this._load_prop("search_y1")			;load y1 -used in pixel/ext/img
+		; check for point types
+		if data_load_success and (InStr(this.type,"pixel")) and (this.prop["last_seen_x"] and this.prop["last_seen_y"])
+			is_data_missing := False
 
-			;if this.area_flag we know it's ext/img only
-			if this.area_flag{				
-				this._load_prop("search_x2")		;load x2 -used in ext/img to define zone end
-				this._load_prop("search_y2")		;load y2 -used in ext/img to define zone end
-			}
-
-			;for pix.ext we are interested in loading last seen
-			if this.type == "ext"{			
-				;TODO build a way for PIX.EXT to load last seen info
-			}	
-
-		}catch any as e{
-			;KEY_ERROR is a custom err thrown when no value found for key
-			if e.message == "KEY_ERROR"{	
-				log("INFO: " this.hrid " has incomplete/corrupt saved data. Prompting for re-picking. " e.extra " => " e.message)
-				; if we are running a point type
-				if this.type == "pixel" or this.type == "pixel_ext"{
-					disp("Please click on a pixel to sample for '" this.hrid "' now.",,,0)
-					this.picker("pixel")
-				}
-				; if we are running an area type
-				if this.area_flag {  ;removed   and !this.prop["search_x2"]
-					disp("Please drag-select an area to search for '" this.hrid "' now.",,,0)
-					this.picker("area")
-				}
-			}
+		; now we take actions accordingly
+		if is_data_missing or to_run_reselect {
+			log("INFO: " this.hrid " has incomplete/corrupt saved data.")
+			return False
 		}
-
-		this._update_search_coords()
+		return True
 	}	
 
 	update_last_seen(){
 		this.last_seen := A_TickCount
 		this.save()
-	}
-
-	;Method to refresh/updaate current coords (can be run without params to recalculate search-area considering window origin offset)
-	; - coords (Array) Expects array of 2/4x Int to update search coords
-	_update_search_coords(coords:=0){	
-		; if not provided recalculate from know values
-		if !coords{
-			this._update_target_window_info()
-			this.x1 := this.prop["search_x1"] + this.target_window_x
-			this.y1 := this.prop["search_y1"] + this.target_window_y
-			this.x2 := this.prop["search_x2"] + this.target_window_x
-			this.y2 := this.prop["search_y2"] + this.target_window_y
-			log("DEBUG:ScenarioDetector._update_search_coords: " this.hrid "'	||area: " this.x1 ":" this.y1 " 	" this.x2 ":" this.y2)
-			Return
-		}
-		; else simply store provided values
-		this.x1 := coords[1]
-		this.y1 := coords[2]
-		if coords.Length = 4 {
-			this.x2 := coords[3]
-			this.y2 := coords[4]
-			log("DEBUG:ScenarioDetector._update_search_coords: " this.hrid "'	||area: " coords[1] ":" coords[2] " 	" coords[3] ":" coords[4])
-			Return
-		}
-		log("DEBUG:ScenarioDetector._update_search_coords: " this.hrid "'	||point: " coords[1] ":" coords[2])
-	}
-
-	;Method to rupdate coords that will be saved **SHOULD always be clientMode**
-	; - coords (Array) Expects array of 2/4x Int to update search coords
-	; - - BLANK coords will result in full size of primary monitor
-	_update_saved_coords(coords:=0){	
-		if !coords{
-			this.prop["search_x1"] := 0
-			this.prop["search_y1"] := 0
-			this.prop["search_x2"] := A_ScreenWidth
-			this.prop["search_y2"] := A_ScreenHeight
-			log("DEBUG:ScenarioDetector._update_saved_coords: " this.hrid "'	||area: 0:0 	" this.prop["search_x2"] ":" this.prop["search_y2"])
-			Return
-		}
-
-		
-		; simply store provided values
-		this.prop["search_x1"] := coords[1]
-		this.prop["search_y1"] := coords[2]
-		if coords.Length = 4 {
-			this.prop["search_x2"] := coords[3]
-			this.prop["search_y2"] := coords[4]
-			log("DEBUG:ScenarioDetector._update_saved_coords: " this.hrid "'	||area: " coords[1] ":" coords[2] " 	" coords[3] ":" coords[4])
-			return
-		}
-		log("DEBUG:ScenarioDetector._update_saved_coords: " this.hrid "'	||Point: " coords[1] ":" coords[2])
 	}	
 
 	get_age_in_ms(){
@@ -2343,11 +2317,14 @@ class ScenarioDetector {
 	}
 
 	picker(mode:="pixel"){	
-		if mode == "pixel"{
-			this._grab_pixel_info()
-		}
-		if mode == "area"{
+		; discontinued the user of mode variable
+
+		if InStr(this.type, "area"){
+			disp("Please drag-select an area to search for '" this.hrid "' now.",,,0)
 			this._grab_area_info()
+		} else if InStr(this.type, "pixel"){
+			disp("Please click on a pixel to sample for '" this.hrid "' now.",,,0)
+			this._grab_pixel_info()
 		}			
 	}
 
@@ -2412,9 +2389,9 @@ class ScenarioDetector {
 
 			
 			this.file_name := file_name
-			this.id := this.hrid := StrSplit(file_name , ".")[1]
+			this.hrid := StrSplit(StrSplit(file_name , ".")[1] , "\")[-1]  ; human readable ID
 			this.tol := variation
-			this.type := "image"
+			this.type := "image|area"
 			this.force_reselection := force_reselection
 			this.area_flag := 1  	;used by parent structure to know if class is doing area functions
 			
