@@ -2204,10 +2204,9 @@ class ScenarioDetector {
 		start_tick := A_TickCount
 
 		while (A_TickCount-start_tick)<(timeout_sec*1000){
-			; start by checking for the halting state
+			; start by checking for the halting statee
 			if (type(halting_function) = "func"){
-				halt_flag:= halting_function.call()
-				if halt_flag
+				if halting_function.call()
 					return False
 			}
 
@@ -2221,7 +2220,7 @@ class ScenarioDetector {
 				return True
 
 			; delay before next loop
-			baseline_sleep_time(interval_ms, halt_flag)
+			baseline_sleep_time(interval_ms, halting_function)
 		}
 		return False
 	}
