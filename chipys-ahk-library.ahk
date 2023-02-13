@@ -2380,7 +2380,7 @@ class ScenarioDetector {
 		; - force_reselection (Bool) Toggle to force the reselections of area and target window
 		; - variation (Integer) Value 0-254 of how much of a variation from the sample is considered a match
 		; - client_name (String) Target window title/name (AHK_exe recommended)
-		__New(file_name, search_area:=0, force_reselection:=0, variation:=50, client_name:=0) {
+		__New(file_name, search_area:=0, force_reselection:=0, variation:=25, client_name:=0) {
 			
 			; function not currently used or accepible
 			; if type(search_area) == "String"
