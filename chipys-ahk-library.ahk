@@ -17,7 +17,7 @@ if A_AhkVersion != "2.0.2" and !A_IsCompiled  ;no longer logical here: and silen
 ;=======================================================
 ; CONSTANTS and FLAGS
 ;=======================================================
-global CAL_VERSION := "3.04"
+global CAL_VERSION := "4.01"
 global ROAMING := A_AppData "\Chipys-AHK-Library"
 global GUI_FONT_SIZE := "20"		;scaled of base of 20 
 global NATO_UI_FONT := "Share Tech Mono.ttf"
@@ -53,11 +53,11 @@ APP_VERSION := "0.0.1", unused := "custom var"
 ;@Ahk2Exe-SetDescription  If you are seeing you have used the chipys-ahk-library without seettings your own ahk2exe instructions
 ;@Ahk2Exe-SetOrigFilename chipys-ahk-library.ahk
 ;@Ahk2Exe-SetMainIcon     chipys-ahk-library.ico
-;@Ahk2Exe-Base 			  Unicode 64-bit.bin
 
 ;=======================================================
 ; variables for predefined HUD objects
 ;=======================================================
+global global_hud_obj0 := HUD("[.]",0)
 global global_hud_obj1 := HUD(".",1)
 global global_hud_obj2 := HUD(". .",2)
 global global_hud_obj3 := HUD(". . .",3)
@@ -70,6 +70,7 @@ global ticker := "-"
 
 
 ; OnError("CUL_err_to_file")
+
 
 ; class to group handling script version checks, updates, and downloading updates/assets
 class UpdateHandler {
@@ -1429,7 +1430,9 @@ class HUD {
 	_create(index){
 		this.i := Integer(index)
 		this.gui_obj := gui("+LastFound `+AlwaysOnTop -caption +disabled +ToolWindow -DPIScale",this.i)
-		this.gui_obj.setfont("c00FF00 s" round(GUI_FONT_SIZE*1.2) " W700 q3", "Verdana")	    ;incase of missing font
+		this.gui_obj.setfont("c00FF00 s" round(GUI_FONT_SIZE*1.2) " W600 q3", NATO_UI_FONT)	    ;incase of missing font
+		this.gui_obj.setfont("c00FF00 s" round(GUI_FONT_SIZE*1.2) " W500 q3", "Roboto")	    ;incase of missing font
+		; this.gui_obj.setfont("c00FF00 s" round(GUI_FONT_SIZE*1.2) " W700 q3", "Verdana")	    ;incase of missing font
 		this.gui_obj.BackColor := "000000"
 		WinSetTransColor("000000")
 		this.txt_obj := this.gui_obj.add("text","xm ym RIGHT", "")
@@ -1437,8 +1440,19 @@ class HUD {
 
 	display(text_to_display, display_time:=5000){
 		LocalWidth := This._calc_width(text_to_display)
-		LX:=A_ScreenWidth - LocalWidth - 100
-		LY:=A_ScreenHeight  - 100 - (50*this.i)
+		
+		; DETECT AND HANDLE location of HUD for optoins
+		; 0 - center top of screen
+		; 1 - bottom right corner stack lowest
+		; 2 - bottom right corner stack mid
+		; 3 - bottom right corner stack top
+		if this.i = 1 or this.i = 2 or this.i = 3{
+			LX:=A_ScreenWidth - LocalWidth - 100
+			LY:=A_ScreenHeight  - 100 - (50*this.i)
+		}else if this.i = 0{
+			LX:= (A_ScreenWidth/2) - LocalWidth
+			LY:= 50 + (50*this.i)
+		}	
 		
 		this.txt_obj.Visible := 0 
 		this.txt_obj.value := text_to_display
@@ -3711,6 +3725,7 @@ class UE4CoordHandler{
 */
 
 human_click(butt,x:=0,y:=0){
+	con := 0
 	h:=random(-2,2)
 
 	if(type(butt)=="Array"){
@@ -3730,6 +3745,8 @@ human_click(butt,x:=0,y:=0){
 }
 
 client_to_screen(coords, win:=0){
+	; Accepts coords as a [x,y] coord pair on client canvas
+	; Accepts window_origin_coords as a [x,y] offset representing window's origin	
 	if !win{
 		WinGetClientPos &X, &Y, &Width, &Height
 		win:= [x,y]
@@ -3738,13 +3755,15 @@ client_to_screen(coords, win:=0){
 	Return [coords[1]+win[1],coords[2]+win[2]]
 }
 
-screen_to_client(coords, win:=0){
-	if !win{
+screen_to_client(coords, window_origin_coords:=0){
+	; Accepts coords as a [x,y] coord pair on screen
+	; Accepts window_origin_coords as a [x,y] offset representing window's origin
+	if !window_origin_coords{
 		WinGetClientPos &X, &Y, &Width, &Height, "A"
-		win:= [x,y]
+		window_origin_coords:= [x,y]
 	}
 
-	Return [coords[1]-win[1],coords[2]-win[2]]
+	Return [coords[1]-window_origin_coords[1],coords[2]-window_origin_coords[2]]
 }
 
 capture_image_region(file_name){
@@ -3784,6 +3803,12 @@ on_screen_feedback_line(activity:="", index:=1, to_hide:=0, duration:=5000){
 		display_text := display_text " " ticker
 	}
 	
+	if index == 0{
+		if to_hide
+			global_hud_obj0.hide()
+		else
+			global_hud_obj0.display(display_text, duration)
+	}
 	if index == 1{
 		if to_hide
 			global_hud_obj1.hide()
