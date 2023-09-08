@@ -8,3 +8,4 @@ cfg.gui_add("TestHotkey")
 cfg.gui_open()
 
 ; new remote from laptop
+; added from desktop
