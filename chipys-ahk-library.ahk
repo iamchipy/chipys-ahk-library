@@ -11,13 +11,13 @@
 ==============================================================================================================
 */
 ;should be able to find it in (autohotkey.com/download/2.0/)
-if A_AhkVersion != "2.0.2" and !A_IsCompiled  ;no longer logical here: and silent_mode!=True
+if A_AhkVersion != "2.0.8" and !A_IsCompiled  ;no longer logical here: and silent_mode!=True
 	msgbox "You are running AHK v" A_AhkVersion "`n`rHowever CAL was written for v2.0.2`n`nYou may need to download that exact version from autohotkey.com/download/2.0/ if you experince issue in the code"
 
 ;=======================================================
 ; CONSTANTS and FLAGS
 ;=======================================================
-global CAL_VERSION := "4.01"
+global CAL_VERSION := "4.02"
 global ROAMING := A_AppData "\Chipys-AHK-Library"
 global GUI_FONT_SIZE := "20"		;scaled of base of 20 
 global NATO_UI_FONT := "Share Tech Mono.ttf"

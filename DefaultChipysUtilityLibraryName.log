@@ -7,3 +7,13 @@
 20230913 08:36:42|: WARN:CfgMgr: Could not locate 'test_config_tool.cfg' to load config data
 20230913 08:36:42|: ALERT:SUSPENDING SCRIPT
 20230913 08:36:58|: ALERT:RESUMING SCRIPT and saving variables
+20230913 08:39:04|: WARN:CfgMgr: Could not locate 'test_config_tool.cfg' to load config data
+20230913 08:39:04|: ALERT:SUSPENDING SCRIPT
+20230913 08:39:12|: ALERT:RESUMING SCRIPT and saving variables
+20230913 08:49:14|: WARN:CfgMgr: Could not locate 'test_config_tool.cfg' to load config data
+20230913 08:49:14|: ALERT:SUSPENDING SCRIPT
+20230913 08:49:14|: INFO:gui_open	||key: demo_hotkey	||obj: ConfigEntry(k:demo_hotkey)(v:F2)
+20230913 08:49:14|: INFO:gui_open	||key: demo_string	||obj: ConfigEntry(k:demo_string)(v:anything)
+20230913 08:49:14|: INFO:demo_string	||anything	||edit
+20230913 08:49:21|: ALERT:RESUMING SCRIPT and saving variables
+20230913 08:49:21|: INFO:Updating hotkey for 'demo_hotkey' to 'F2'
