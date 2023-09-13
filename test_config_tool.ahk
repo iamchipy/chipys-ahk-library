@@ -12,7 +12,8 @@ cfg :=  ConfigManagerTool(cfg_filename,"General","ahk_exe pathofexile.com")
 
 ; Create the entries that your script will be using
 ; HOTKEY
-cfg.ini("demo_hotkey", 1, "F2", "hotkey", "This is what a Hotkey config variable looks like")
+; accessories for HotKeys needs to be "['toggle','*0']" to give always_on options with [ctype, defualt]
+cfg.ini("demo_hotkey", 0, "F2", "hotkey", "This is what a Hotkey config variable looks like",['toggle','*0'])
 ; TEXT
 cfg.ini("demo_string", 0, "anything", "edit", "This is what a plain text string config variable looks like")
 
