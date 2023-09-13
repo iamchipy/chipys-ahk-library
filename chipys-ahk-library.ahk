@@ -72,17 +72,23 @@ global ticker := "-"
 ; OnError("CUL_err_to_file")
 
 
-; class to group handling script version checks, updates, and downloading updates/assets
+; # class to group handling script version checks, updates, and downloading updates/assets.
+; When created it will ping the version file, passively wait, compare version, then notify user
+; - download_url (STR) - should be the full URL to a downloadable EXE
+; - script_name (STR) - should be the full URL to a downloadable EXE
+; - display_name (STR) - should be the full URL to a downloadable EXE
+; - version_file_url (HIDDEN/REQUIRED) := download_url + "_version.txt"
 class UpdateHandler {
+	
 	__new(download_url, script_name:="DefaultScriptName", display_name:="DefaultDisplayName"){
 		; build variables and set defaults
-		version_file_url := download_url "_version.txt"
+		this.version_file_url := download_url "_version.txt"
 		this.script_name := script_name
 		this.download_url := download_url
 		this.display_name := display_name
 
 		; start the query for cloud version
-		this._query_latest_version_then_callback(version_file_url, (*)=>this.compare_versions_and_notify())
+		this._query_latest_version_then_callback(this.version_file_url, (*)=>this.compare_versions_and_notify())
 	}
 
 	_query_latest_version_then_callback(version_file_url, callback_function){
