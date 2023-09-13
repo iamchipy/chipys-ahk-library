@@ -72,17 +72,20 @@ global ticker := "-"
 ; OnError("CUL_err_to_file")
 
 
-; # class to group handling script version checks, updates, and downloading updates/assets.
+; # UpdateHandler
+; class to group handling script version checks, updates, and downloading updates/assets.
 ; When created it will ping the version file, passively wait, compare version, then notify user
 ; - download_url (STR) - should be the full URL to a downloadable EXE
-; - script_name (STR) - should be the full URL to a downloadable EXE
-; - display_name (STR) - should be the full URL to a downloadable EXE
+; - current_version (STR) - Current app version in 0.0.0.0 notation
+; - script_name (STR) - Full desired name of the file after it's been downloaded
+; - display_name (STR) - User friendly display name
 ; - version_file_url (HIDDEN/REQUIRED) := download_url + "_version.txt"
 class UpdateHandler {
 	
-	__new(download_url, script_name:="DefaultScriptName", display_name:="DefaultDisplayName"){
+	__new(download_url, current_version, script_name:="DefaultScriptName", display_name:="DefaultDisplayName"){
 		; build variables and set defaults
 		this.version_file_url := download_url "_version.txt"
+		this.current_version := current_version
 		this.script_name := script_name
 		this.download_url := download_url
 		this.display_name := display_name
@@ -99,9 +102,9 @@ class UpdateHandler {
 		this.com_obj.send()
 	}
 
+	; Receives the GET callback and compares versions
+	; - can be manually called if you want (will do nothing if no respose has arrived yet)
 	compare_versions_and_notify(){
-		; global APP_VERSION, bumper_active
-		; Receives the GET callback and compares versions
 
 		; check if callback has a completed state
 	    if (this.com_obj.readyState != 4){  ; Not done yet.
@@ -112,13 +115,13 @@ class UpdateHandler {
 	    	; skim off and line returns
 	    	cloud_version := strsplit(this.com_obj.responseText,"`r")[1]
 	    	; create a log
-	    	;log append_log("DEBUG: prompt_update -> comparing " cloud_version "(cloud) to " app_version "(current)")
+	    	;log append_log("DEBUG: prompt_update -> comparing " cloud_version "(cloud) to " this.current_version "(current)")
 
-	    	; pass cloud version info to c
-	        if this._is_newer_version(cloud_version, app_version) == 1{
+	    	; Compares cloud to local version info to check if newer is available 
+	        if this._is_newer_version(cloud_version, this.current_version) == 1{
 	        	this.prompt_update(cloud_version)
 		    }else{
-		        TrayTip("UpdateCheck(" cloud_version ")`nYou are on the latest version. (" app_version ")", this.display_name,"Mute")
+		        TrayTip("UpdateCheck(" cloud_version ")`nYou are on the latest version. (" this.current_version ")", this.display_name,"Mute")
 	        	; prompt_update(cloud_version,True)
 		    }
 		}else (
@@ -127,6 +130,7 @@ class UpdateHandler {
 	}
 
 
+	; Compares cloud to local version info to check if newer is available 
 	_is_newer_version(v_one, v_two){
 		; receives version strings 1 & 2
 		; returns whichever is newer or 0/FALSE for neither
@@ -156,6 +160,7 @@ class UpdateHandler {
 		return 0
 	}
 
+	; prompts the user with a alert/message that there is a newer version available
 	prompt_update(cloud_version:=0, force_redownload:= False){
 		; writes a powershell string the terminate itself for update
 

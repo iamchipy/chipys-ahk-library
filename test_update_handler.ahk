@@ -5,7 +5,5 @@
 global LOG_LEVEL := 1  
 
 ; create update handler object
-updater_obj := UpdateHandler("example.com","scriptname.ahk", "Script Title Name")
+updater_obj := UpdateHandler("https://chipy.dev/res/Chipys_Mouse_Bumper.exe","1.0.0","Chipys_Mouse_Bumper.exe", "Chipy's Mouse Bumper")
 
-; check for a newer version
-updater_obj.compare_versions_and_notify()
