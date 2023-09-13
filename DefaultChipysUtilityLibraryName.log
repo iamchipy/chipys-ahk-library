@@ -1,3 +1,9 @@
 20230829 21:54:59|: WARN:CfgMgr: Could not locate 'ahk.cfg' to load config data
 20230829 21:54:59|: ALERT:SUSPENDING SCRIPT
 20230829 21:55:01|: ALERT:RESUMING SCRIPT
+20230913 08:31:13|: WARN:CfgMgr: Could not locate 'ahk.cfg' to load config data
+20230913 08:31:13|: ALERT:SUSPENDING SCRIPT
+20230913 08:31:16|: ALERT:RESUMING SCRIPT
+20230913 08:36:42|: WARN:CfgMgr: Could not locate 'test_config_tool.cfg' to load config data
+20230913 08:36:42|: ALERT:SUSPENDING SCRIPT
+20230913 08:36:58|: ALERT:RESUMING SCRIPT and saving variables
