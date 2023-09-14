@@ -79,7 +79,7 @@ global ticker := "-"
 ; - custom_icon_path
 ; - 
 class MetaInfo {
-	__New(app_version:="0.0.1", file_name:="DefaultAppName.exe", display_name:="Default App Name", custom_icon_path:="defaultname.ico") {
+	__New(app_version:="0.0.1", file_name:="DefaultAppName.exe", display_name:="Default App Name", custom_icon_path:="ChipyLogo.png") {
 		this.app_version := app_version
 		this.file_name := file_name
 		this.display_name := display_name
@@ -90,14 +90,46 @@ class MetaInfo {
 ; # TrayBuilder
 ; Class to help keep all my common tray menu settings in one place for easy management
 class TrayBuilder {
-	__New(meta_info_obj:="", remove_defaults:=true) {
+	__New(meta_info_obj:="", remove_defaults:=true, run_on_startup:=true) {
 		if meta_info_obj == ""{
 			this.meta_info_obj = MetaInfo()
 		}
 
 		; now we execute the building of the tray
 		try{
-			;TODO-MED build the custom tray changes template
+			if !remove_defaults {
+				; clear all SysTray items (AKA remove defaults)
+				a_traymenu.delete()
+			}else{
+				; add a spacers if we aren't clearing defaults
+				a_traymenu.add()
+			}
+
+			
+
+
+			; build the app "title"	
+			title_str := this.meta_info_obj.display_name " v" app_version		
+			a_traymenu.add(title_str)
+			a_traymenu.default := title_str
+
+			; add common options
+			if run_on_startup
+				a_traymenu.add("Update", download_update.bind())
+			if run_on_startup{
+				a_traymenu.add("Run on Startup", (*)=> run_script_on_startup("toggle"))
+				if run_script_on_startup()
+					a_traymenu.check("Run on Startup")
+			}
+			
+			a_traymenu.add()	
+			a_traymenu.add("Tech: " my_name, tray_name.bind())
+			a_traymenu.add("SIIP: " siip_related_to, tray_siip.bind())
+			a_traymenu.add("Hotkey: " hotkey_str, tray_hotkey.bind())
+			a_traymenu.add()
+			a_traymenu.add("Restart", Restart.bind())
+			a_traymenu.add("Exit", terminate.bind())
+
 		}catch{
 			MsgBox "Something went wrong with the custom systemtray building (reverting to defaults)"
 			;TODO-MED build default tray here
