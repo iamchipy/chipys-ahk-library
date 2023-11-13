@@ -72,13 +72,13 @@ global ticker := "-"
 
 
 ; OnError("CUL_err_to_file")
+
 ; # MetaInfo
 ; Class to manage info about the app, mostly for internal use
 ; - version (str) - for storing the apps current version
 ; - file_name (str) - full name of the script file including extention
 ; - display_name (str) - a reader friendly display name for the app
 ; - custom_icon_path
-; - 
 class MetaInfo {
 	__New(app_version:="0.0.1", file_name:="DefaultAppName.exe", display_name:="Default App Name", custom_icon_path:="ChipyLogo.png") {
 		this.app_version := app_version
@@ -92,8 +92,8 @@ class MetaInfo {
 ; Class to help keep all my common tray menu settings in one place for easy management
 class TrayBuilder {
 	__New(meta_info_obj:="", remove_defaults:=true, run_on_startup:=true) {
-		if meta_info_obj == ""{
-			this.meta_info_obj = MetaInfo()
+		if meta_info_obj == "" {
+			this.meta_info_obj := MetaInfo()
 		}
 
 		; now we execute the building of the tray
