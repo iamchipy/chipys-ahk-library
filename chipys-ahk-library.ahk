@@ -8,6 +8,8 @@
  \____/|_| |_||_|| .__/  \__, |(_) \__,_| \___|  \_/  
                  | |      __/ |                       
                  |_|     |___/  
+Support my Root Beer addiction if you want <3
+https://www.paypal.com/donate/?hosted_button_id=KEYF8KWYJYSFU				 
 ==============================================================================================================
 */
 ;should be able to find it in (autohotkey.com/download/2.0/)
@@ -17,7 +19,7 @@ if A_AhkVersion != "2.0.8" and !A_IsCompiled  ;no longer logical here: and silen
 ;=======================================================
 ; CONSTANTS and FLAGS
 ;=======================================================
-global CAL_VERSION := "4.02"
+global CAL_VERSION := "4.05"
 global ROAMING := A_AppData "\Chipys-AHK-Library"
 global GUI_FONT_SIZE := "20"		;scaled of base of 20 
 global NATO_UI_FONT := "Share Tech Mono.ttf"
@@ -70,7 +72,6 @@ global ticker := "-"
 
 
 ; OnError("CUL_err_to_file")
-
 ; # MetaInfo
 ; Class to manage info about the app, mostly for internal use
 ; - version (str) - for storing the apps current version
@@ -146,18 +147,21 @@ class TrayBuilder {
 ; - script_name (STR) - Full desired name of the file after it's been downloaded
 ; - display_name (STR) - User friendly display name
 ; - version_file_url (HIDDEN/REQUIRED) := download_url + "_version.txt"
+; - download_url(str) - used to replace the script but ALSO used as the base ith a _version file expected
+; - - Example: https://chipy.dev/download/cammm.exe > Expectes https://chipy.dev/download/cammm.exe_version.txt to exist
+; - scritp_name(str) - should be the name of your exe (without the .exe extention)
+; - display_name(str) - should be the reader friendly display name of your script
 class UpdateHandler {
 	
 	__new(download_url, current_version, script_name:="DefaultScriptName", display_name:="DefaultDisplayName"){
 		; build variables and set defaults
 		this.version_file_url := download_url "_version.txt"
-		this.current_version := current_version
 		this.script_name := script_name
 		this.download_url := download_url
 		this.display_name := display_name
 
 		; start the query for cloud version
-		this._query_latest_version_then_callback(this.version_file_url, (*)=>this.compare_versions_and_notify())
+		this._query_latest_version_then_callback(this.this.version_file_url, (*)=>this.compare_versions_and_notify())
 	}
 
 	_query_latest_version_then_callback(version_file_url, callback_function){
@@ -168,9 +172,9 @@ class UpdateHandler {
 		this.com_obj.send()
 	}
 
-	; Receives the GET callback and compares versions
-	; - can be manually called if you want (will do nothing if no respose has arrived yet)
+	; Used as the callback listener for update request. Then compares versions and pings user
 	compare_versions_and_notify(){
+		; global APP_VERSION, bumper_active
 
 		; check if callback has a completed state
 	    if (this.com_obj.readyState != 4){  ; Not done yet.
@@ -181,7 +185,7 @@ class UpdateHandler {
 	    	; skim off and line returns
 	    	cloud_version := strsplit(this.com_obj.responseText,"`r")[1]
 	    	; create a log
-	    	;log append_log("DEBUG: prompt_update -> comparing " cloud_version "(cloud) to " this.current_version "(current)")
+	    	log("DEBUG: prompt_update -> comparing " cloud_version "(cloud) to " app_version "(current)")
 
 	    	; Compares cloud to local version info to check if newer is available 
 	        if this._is_newer_version(cloud_version, this.current_version) == 1{
@@ -228,23 +232,29 @@ class UpdateHandler {
 
 	; prompts the user with a alert/message that there is a newer version available
 	prompt_update(cloud_version:=0, force_redownload:= False){
-		; writes a powershell string the terminate itself for update
+		; writes a powershell string the terminate itself for update 
+		; checking for old in the APPDATA path
 
 		undate_ps1_str := 'Stop-Process -Name "' this.script_name '"`n'
-		undate_ps1_str .= 'if(Test-Path -Path ".\' this.script_name '.old") {Remove-Item ".\' this.script_name '.old"}`n' 
-		undate_ps1_str .= 'Rename-Item -Path ".\' this.script_name '.exe" -NewName ".\' this.script_name '.old" -force`n'
-		undate_ps1_str .= 'if(Test-Path -Path ".\' this.script_name '.exe"){ Remove-Item ".\' this.script_name '.exe"}`n'
-		undate_ps1_str .= 'Rename-Item -Path ".\' this.script_name '.new" -NewName ".\' this.script_name '.exe" -force`n'
-		undate_ps1_str .= '& ".\' this.script_name '.exe"'
+		undate_ps1_str .= 'if(Test-Path -Path "' A_WorkingDir  '\' this.script_name '.old") {Remove-Item "' A_WorkingDir  '\' this.script_name '.old"}`n' 
+		undate_ps1_str .= 'Rename-Item -Path "' A_ScriptDir  '\' this.script_name '.exe" -NewName "' A_WorkingDir  '\' this.script_name '.old" -force`n'
+		undate_ps1_str .= 'if(Test-Path -Path "' A_ScriptDir  '\' this.script_name '.exe"){ Remove-Item "' A_ScriptDir  '\' this.script_name '.exe"}`n'
+		undate_ps1_str .= 'Rename-Item -Path "' A_ScriptDir  '\'  this.script_name '.new" -NewName "' A_ScriptDir  '\'  this.script_name '.exe" -force`n'
+		undate_ps1_str .= '& "' A_ScriptDir  '\'  this.script_name '.exe"'
 
 		if !force_redownload
-			answer := msgbox("NEWER version (" cloud_version ") available`n`nhttps://chipy.dev",,"y/n")
+			answer := msgbox("NEWER version (" cloud_version ") available`n`n" this.download_url,,"y/n")
 		if force_redownload or answer = "yes"{
-			download this.download_url, this.script_name ".new"
-			download this.download_url "_img.zip", script_name ".exe_img.zip"
-			this._unzip(A_WorkingDir "\" script_name ".exe_img.zip", A_WorkingDir "\img")  ;TODO possible dynamic file path inconsistancy
-			FileDelete("update.ps1")
-			FileAppend(undate_ps1_str, "update.ps1")
+			download this.download_url, A_ScriptDir "\"  this.script_name ".new"
+			try{
+				download this.download_url "_img.zip", A_WorkingDir "\" script_name ".exe_img.zip"
+				this._unzip(A_WorkingDir "\" script_name ".exe_img.zip", A_WorkingDir "\img")  ;TODO possible dynamic file path inconsistancy
+			}catch {
+				log("ERR:prompt_update()>Trouble downloading _img ")
+			}
+			try
+				FileDelete("update.ps1")
+			FileAppend(undate_ps1_str, A_WorkingDir "\update.ps1")
 
 			Run( "PowerShell.exe .\update.ps1")
 		}
@@ -256,8 +266,8 @@ class UpdateHandler {
 		;https://www.autohotkey.com/boards/viewtopic.php?t=59016
 		; errors := RunWait( "PowerShell.exe -Command Expand-Archive -LiteralPath '" A_WorkingDir "\" source "' -DestinationPath " A_WorkingDir "\" destination,,"hide" )
 		errors := RunWait( "PowerShell.exe -Command Expand-Archive -LiteralPath '"  source "' -DestinationPath " destination)
-		;log if errors 
-			; pin( "WARN:error " errors " unzipping '" source "' to '" destination "'",True)
+		if A_LastError
+			log( "WARN:error " errors " unzipping '" source "' to '" destination "'")
 	}	
 }
 
@@ -992,7 +1002,7 @@ class ConfigManagerTool {
 		;sets default for custom section is != 0
 		((file_name)?(this.fn:=file_name):(this.fn:=CFG_PATH))					;accepts custom name or uses normal
 		((custom_section)?(this.section:=custom_section):(this.section:="ConfigManager"))
-		((client_name)?(this.client_name:=client_name):(MsgBox(custom_section " MISSING client name")))
+		((client_name)?(this.client_name:=client_name):("A"))
 		this.gui_size_limit_height := 20
 
 		this.c := map()					;map of settings in dict/map form for easy of saving, loading, and recall
@@ -1100,6 +1110,20 @@ class ConfigManagerTool {
 		}
 	}
 
+	; loops to bind all possible keys for initialization
+	; - possible need to sunset this
+	bind_all_keys(){ 
+		for key, obj in this.c{
+			try{
+				if obj.type = "hotkey"
+					this._bind(obj.value, key, obj.toggle)
+			}catch any as e{
+				CULErrorHandler(e,"Encounterd possible faulty/old ini keybind entry: `n'" key "' -> '" obj.value "' `Will now attempt to heal/clean the error")
+				IniDelete this.fn, this.section , key
+			}
+		}
+	}
+
 	; Method used to turn off all hotkeys currently listed in this(current CfgMgr)
 	unbind_all(){
 		for key, obj in this.c{
@@ -1162,9 +1186,6 @@ class ConfigManagerTool {
 				if obj.type = "edit" or obj.type = "hotkey"
 					this.gui.Add(obj.type, "xp+30 w" round(GUI_FONT_SIZE*10) " v" key, obj.value)
 				if obj.type = "DropDownList"{
-
-					if LOG_LEVEL
-						tooltip key "`n" obj.value "`n`n" obj.pipelist
 					temp:= this.gui.Add(obj.type, "lowercase altsubmit xp+30 w200 v" key " choose" obj.value, obj.pipelist)
 					temp.OnEvent("change",(obj_of_event,*)=> this.gui_apply_preset(obj_of_event))
 				}
@@ -1218,6 +1239,11 @@ class ConfigManagerTool {
 
 				;main value item 
 				if obj.type = "edit" {
+					try{
+					; MsgBox "DEBUG " Type(obj.value)
+					; MsgBox "DEBUG " Type(obj.value[1])
+					MsgBox "DEBUG " obj.value[1]
+					}
 					if strlen(obj.value)>25{
 						if type(obj.acc) = "array" and obj.acc[1] = "DropDownList"
 							this.gui.Add(obj.type, "xp+" height_margin_increment " w" round(GUI_FONT_SIZE*10) " r3 v" key, obj.value)	
@@ -1298,7 +1324,6 @@ class ConfigManagerTool {
 		}
 
 		this.save_all()
-		; this.bind_all_keys()
 	}
 
 	gui_save_one(custom_section:=0){
@@ -1332,8 +1357,7 @@ class ConfigManagerTool {
 	}
 
 	gui_apply_preset(obj_of_event){
-		if LOG_LEVEL
-			MsgBox this.c2["preset"].value "->" obj_of_event.value "(" obj_of_event.Text ")"
+		log("INFO:" this.c2["preset"].value "->" obj_of_event.value "(" obj_of_event.Text ")")
 
 		;sets preset map entry's value
 		this.c2["preset"].value := obj_of_event.value
@@ -1401,6 +1425,19 @@ class ConfigManagerTool {
 		}
 	}
 	
+	; ### ini(key, delete_if_blank:=0, default_value:=0, ctr_type:="edit", info:='',accessories:=0) 
+	; used to create new value in the ini-file for saving configurations 
+	; - key(str) text string name of the variable
+	; - delete_if_blank(bool) clear the variable if not in use
+	; - default_value(str) default string value of the var
+	; - ctr_type(str) type of variable
+	; - - edit = free entry string variable
+	; - - DropDownList = using an array to provide the list of options (see Accessories section for options)
+	; - info(str) str used to provide help or about info for the variable
+	; - accessories(dynamic)
+	; - - * = this item has a default when used with a dropdown type
+	; - - EXAMPLE ["toggle","*1"] (create a toggle checkbox with true as default)
+	; - - EXMAPLE ["DropDownList", "item 2"] (example of a dropdown list options)
 	ini(key, delete_if_blank:=0, default_value:=0, ctr_type:="edit", info:='',accessories:=0){ ; stores data enties in C/C2 maps of this obj
 		; accessories for HotKeys needs to be "['toggle','*0']" to give always_on options with [ctype, defualt]
 		if ctr_type = "DropDownList"{
@@ -1460,8 +1497,9 @@ class ConfigManagerTool {
 		}catch any as e{
 			; this is to catch when file doesn't contain any valid sections
 			if e.Message = "The requested key, section or file was not found."{
-				log("WARN:CfgMgr: Unable to find requested section or key in ini file! Should only happen when INI is empty. Will rename to create new one.")
-				FileMove(this.fn, this.fn ".old" A_Now)
+				log("WARN:CfgMgr: Unable to find requested section or key in ini file! Should only happen when INI is empty. Will try to rename to create new one.")
+				try
+					FileMove(this.fn, this.fn ".old" A_Now)
 				return
 			}
 			throw e
@@ -1615,6 +1653,54 @@ class HUD {
 }
 
 class Tool {
+	; Class for handling things related to the screen/coordinates storing info about the 
+	; source monitor/screen and has the ability to have a destination scale/monitor be set
+	class Screen {
+		__init(){
+			; these values or the source or initial scale screen
+			this.source_x := 0
+			this.source_y := 0
+			this.source_w := 1920	
+			this.source_h := 1080
+		}
+
+		; This function allow you to set the size of the screen you are translating TO
+		set_destination_screen(destination_xywh_array:=0){
+			if destination_xywh_array = 0{
+				this.destination_x := this.source_x
+				this.destination_y := this.source_y
+				this.destination_w := this.source_w
+				this.destination_h := this.source_h
+				log("INFO: Desination rescaling used default value")
+			}else{
+				this.destination_x := destination_xywh_array[0]
+				this.destination_y := destination_xywh_array[1]
+				this.destination_w := destination_xywh_array[2]	
+				this.destination_h := destination_xywh_array[3]
+			}
+		}
+
+		; Function that returns a rescaled/normalized/adjusted version of the input cooredinates
+		; - coordinates are scaled by % of souce and then matched at the new scale
+		; - coordinate_pair(Array) :: [X,Y] example [192,108]
+		; - returns coordinate pair array [X,Y]
+		rescale_coordinates(coordinate_pair){
+			input_x := coordinate_pair[0]*(this.destination_w/this.source_w)
+			input_y := coordinate_pair[1]*(this.destination_h/this.source_h)
+			return [input_x,input_y]
+		}
+
+		; Function that repositions a coordinate pair according to a new window origin to help 
+		; with windows that are different sizes and locations on screen
+		; - coordinate_pair(Array) :: [X,Y] example [192,108]
+		; - returns coordinate pair array [X,Y]		
+		reposition_coordinates(coordinate_pair){
+			input_x := coordinate_pair[0]+this.destination_w-this.source_w
+			input_y := coordinate_pair[1]+this.destination_h-this.source_h
+			return [input_x,input_y]
+		}
+	}
+
 	class Mouse {
 		__init(){
 			;sets basic vars so that the obj has those prop later
@@ -2080,6 +2166,37 @@ class ScenarioDetector {
 
 	}
 
+	; TODO likely needs to be removed/reworked but left for legacy support
+	_refine_coords(refine_array:=0){ ;update offset/win(refine_array) & 'live' with prop[]ratios+offset
+		; if !WinExist(this.client_name){
+		; 	disp(this.hrid " could not find ARK window")			;STATIC
+		; 	Return
+		; }
+		; refine_array -> [[win-x,win-y],[win-w,win-h]]
+		; if !refine_array{					;if we weren't info try get it from client window
+		; 	WinGetClientPos &X, &Y, &Width, &Height, "A"
+		; 	refine_array := [[X,Y],[Width,height]]	
+		; }
+
+		; this.update_offset(refine_array[1])		;update the object's current offset prop (to be saved)
+		; this.update_win(refine_array[2])		;update the object's current window dimentions prop (to be saved)
+
+		; ; MsgBox  this.prop["x1"] ":" this.prop["y1"] "`n" this.prop["x2"] ":" this.prop["y2"]
+		; ;new system (scaler for ark ui)
+		; ;converts client coords (sample) to client coords current res
+		; temp_coords :=[this.prop["x1"],this.prop["y1"],this.prop["x2"],this.prop["y2"]]
+		; if this.prop["ui_compensate"]
+		; 	temp_coords :=[this.prop["x1"],this.prop["y1"],this.prop["x2"],this.prop["y2"],this.prop["ui_compensate"]]
+		; normalized_array := coords_normalize_array(	temp_coords,
+		; 											[this.prop["x_ref"],this.prop["y_ref"]],
+		; 											refine_array[2])
+		; this.x1 := normalized_array[1] + this.prop["x_off"]
+		; this.y1 := normalized_array[2] + this.prop["y_off"]
+		; this.x2 := normalized_array[3] + this.prop["x_off"]
+		; this.y2 := normalized_array[4] + this.prop["y_off"]	
+		return refine_array
+	}
+
 	; Method used to update this Object Instance's info about the target window (either live-pulling the info or via input)
 	; - xywh_info_array (Array) Accepts array of 4x Int representing window info x,y,w,h
 	_update_target_window_info(xywh_info_array:=0){
@@ -2464,13 +2581,15 @@ class ScenarioDetector {
 		this.save_all()
 	}
 
+	; IMG Class allowing for a picture to be found
+	; ### Img(file_name, search_area:=0, force_reselection:=0, variation:=25, client_name:=0)
+	; - file_name (String) Filename or full path of the sample with black as transparent 
+	; - search_area (Array) Area can be double-pair coords or area-preset-name String
+	; - force_reselection (Bool) Toggle to force the reselections of area and target window
+	; - variation (Integer) Value 0-254 of how much of a variation from the sample is considered a match
+	; - client_name (String) Target window title/name (AHK_exe recommended)
 	class Img extends ScenarioDetector{
-		; IMG Class allowing for a picture to be found
-		; - file_name (String) Filename or full path of the sample with black as transparent 
-		; - search_area (Array) Area can be double-pair coords or area-preset-name String
-		; - force_reselection (Bool) Toggle to force the reselections of area and target window
-		; - variation (Integer) Value 0-254 of how much of a variation from the sample is considered a match
-		; - client_name (String) Target window title/name (AHK_exe recommended)
+
 		__New(file_name, search_area:=0, force_reselection:=0, variation:=25, client_name:=0) {
 			
 			; function not currently used or accepible
@@ -4574,6 +4693,15 @@ clog(ErrClass, f:="SourceFunc") {
     return true
 }
 
+; primary logging function
+; LEVELS 1-10 (higher = less spam)
+; - 1 = SPAM
+; - 2 = DEBUG
+; - 4 = INFO
+; - 6 = WARN
+; - 8 = ALERT
+; - 9 = ERR
+; - 10 = REPORT
 log(in_str) {
 	global LOG_LEVEL, LOG_PATH
 	; ; check log levels and filter
