@@ -13,13 +13,13 @@ https://www.paypal.com/donate/?hosted_button_id=KEYF8KWYJYSFU
 ==============================================================================================================
 */
 ;should be able to find it in (autohotkey.com/download/2.0/)
-if A_AhkVersion != "2.0.8" and !A_IsCompiled  ;no longer logical here: and silent_mode!=True
+if A_AhkVersion != "2.0.10" and !A_IsCompiled  ;no longer logical here: and silent_mode!=True
 	msgbox "You are running AHK v" A_AhkVersion "`n`rHowever CAL was written for v2.0.8`n`nYou may need to download that exact version from autohotkey.com/download/2.0/ if you experince issue in the code"
 
 ;=======================================================
 ; CONSTANTS and FLAGS
 ;=======================================================
-global CAL_VERSION := "4.05"
+global CAL_VERSION := "4.07"
 global ROAMING := A_AppData "\Chipys-AHK-Library"
 global GUI_FONT_SIZE := "20"		;scaled of base of 20 
 global NATO_UI_FONT := "Share Tech Mono.ttf"
@@ -114,22 +114,23 @@ class TrayBuilder {
 			a_traymenu.add(title_str)
 			a_traymenu.default := title_str
 
-			; add common options
-			if run_on_startup
-				a_traymenu.add("Update", download_update.bind())
-			if run_on_startup{
-				a_traymenu.add("Run on Startup", (*)=> run_script_on_startup("toggle"))
-				if run_script_on_startup()
-					a_traymenu.check("Run on Startup")
-			}
+			;# UNDERCONSTRUCTION
+			; ; add common options
+			; if run_on_startup
+			; 	a_traymenu.add("Update", download_update.bind())
+			; if run_on_startup{
+			; 	a_traymenu.add("Run on Startup", (*)=> run_script_on_startup("toggle"))
+			; 	if run_script_on_startup()
+			; 		a_traymenu.check("Run on Startup")
+			; }
 			
-			a_traymenu.add()	
-			a_traymenu.add("Tech: " my_name, tray_name.bind())
-			a_traymenu.add("SIIP: " siip_related_to, tray_siip.bind())
-			a_traymenu.add("Hotkey: " hotkey_str, tray_hotkey.bind())
-			a_traymenu.add()
-			a_traymenu.add("Restart", Restart.bind())
-			a_traymenu.add("Exit", terminate.bind())
+			; a_traymenu.add()	
+			; a_traymenu.add("Tech: " my_name, tray_name.bind())
+			; a_traymenu.add("SIIP: " siip_related_to, tray_siip.bind())
+			; a_traymenu.add("Hotkey: " hotkey_str, tray_hotkey.bind())
+			; a_traymenu.add()
+			; a_traymenu.add("Restart", Restart.bind())
+			; a_traymenu.add("Exit", terminate.bind())
 
 		}catch{
 			MsgBox "Something went wrong with the custom systemtray building (reverting to defaults)"
@@ -159,9 +160,10 @@ class UpdateHandler {
 		this.script_name := script_name
 		this.download_url := download_url
 		this.display_name := display_name
+		this.current_version := current_version
 
 		; start the query for cloud version
-		this._query_latest_version_then_callback(this.this.version_file_url, (*)=>this.compare_versions_and_notify())
+		this._query_latest_version_then_callback(this.version_file_url, (*)=>this.compare_versions_and_notify())
 	}
 
 	_query_latest_version_then_callback(version_file_url, callback_function){
@@ -174,8 +176,6 @@ class UpdateHandler {
 
 	; Used as the callback listener for update request. Then compares versions and pings user
 	compare_versions_and_notify(){
-		; global APP_VERSION, bumper_active
-
 		; check if callback has a completed state
 	    if (this.com_obj.readyState != 4){  ; Not done yet.
 	        return
@@ -1185,6 +1185,7 @@ class ConfigManagerTool {
 					this.gui.Add(obj.type, "xp+30 w" round(GUI_FONT_SIZE*10) " v" key " checked" obj.value, "default: " obj.default)
 				if obj.type = "edit" or obj.type = "hotkey"
 					this.gui.Add(obj.type, "xp+30 w" round(GUI_FONT_SIZE*10) " v" key, obj.value)
+				; TODO figure out how to do this for non niche cases to improve library
 				if obj.type = "DropDownList"{
 					temp:= this.gui.Add(obj.type, "lowercase altsubmit xp+30 w200 v" key " choose" obj.value, obj.pipelist)
 					temp.OnEvent("change",(obj_of_event,*)=> this.gui_apply_preset(obj_of_event))
@@ -1240,9 +1241,9 @@ class ConfigManagerTool {
 				;main value item 
 				if obj.type = "edit" {
 					try{
-					; MsgBox "DEBUG " Type(obj.value)
-					; MsgBox "DEBUG " Type(obj.value[1])
-					MsgBox "DEBUG " obj.value[1]
+						log "DEBUG " Type(obj.value)
+						log "DEBUG " Type(obj.value[1])
+						log "DEBUG " obj.value[1]
 					}
 					if strlen(obj.value)>25{
 						if type(obj.acc) = "array" and obj.acc[1] = "DropDownList"
@@ -1440,16 +1441,18 @@ class ConfigManagerTool {
 	; - - EXMAPLE ["DropDownList", "item 2"] (example of a dropdown list options)
 	ini(key, delete_if_blank:=0, default_value:=0, ctr_type:="edit", info:='',accessories:=0){ ; stores data enties in C/C2 maps of this obj
 		; accessories for HotKeys needs to be "['toggle','*0']" to give always_on options with [ctype, defualt]
-		if ctr_type = "DropDownList"{
-			this.c2[key]:=ConfigEntry(	key,
-										this.section_alt,
-										this.fn,
-										ctr_type,
-										accessories,
-										default_value,
-										delete_if_blank,
-										info)
-		}else{
+		; if ctr_type = "DropDownList"{
+		; 	this.c2[key]:=ConfigEntry(	key,
+		; 								this.section_alt,
+		; 								this.fn,
+		; 								ctr_type,
+		; 								accessories,
+		; 								default_value,
+		; 								delete_if_blank,
+		; 								info)
+		; }else{
+
+		; #TEMP CHANGE to that breaks presets for CARKA
 			this.c[key]:=ConfigEntry(	key,
 										this.section,
 										this.fn,
@@ -1458,14 +1461,12 @@ class ConfigManagerTool {
 										default_value,
 										delete_if_blank,
 										info)
-		}
+		; }
 	}
 
 	load_all(){
 		; checks if the file exits
 		if !FileExist(this.fn){
-			;if it doesn't
-			;leave a log
 			log("WARN:CfgMgr: Could not locate '" this.fn "' to load config data")
 			;exit load process
 			return
@@ -1474,9 +1475,11 @@ class ConfigManagerTool {
 		Try{
 			;reads section from ini
 			temp_read := iniread(this.fn, this.section)	
+			; MsgBox temp_read
 			;now build map with values from string 
 			lines_array := StrSplit(temp_read, ["`n"])			;split each line in string 
 			for l in lines_array{								;loop for each line
+				; MsgBox l " has been found"
 				pairs_array := StrSplit(l, "=")					;split pair
 				if instr(pairs_array[1], "_toggle")				;checks if it's an accessory and skips it
 					Continue
@@ -1484,7 +1487,7 @@ class ConfigManagerTool {
 				this.wrong_type_handler(pairs_array[1], pairs_array[2])
 				; stores the data in the "c" map
 				this.c[pairs_array[1]].value := pairs_array[2]
-				log("DEBUG:Load_ALL(line:" l "		||" pairs_array[1] " +> " pairs_array[2] )
+				log("DEBUG:Load_ALL(line:" l "		||" pairs_array[1] " +> " this.c[pairs_array[1]].value )
 				try
 					if this.c[pairs_array[1]].type = "hotkey" {
 						log("SPAM:Auto-binding . . . ")
@@ -2878,13 +2881,14 @@ class UpdateTool{
 }
 
 class LicenseTool{
+	; ### LicenseTool __new(user_name, custom_url, icon_path:=0, consequence_method:=0, unconsequence_method:=0)
 	; tool used to get a unique identifier code for hardware and mix with username then compare to web url presence
+	; - user_name (str) - user's name could be discord or anything to identify them with
+	; - custom_url (str) - URL to the license_haystack to search expected url to a txt/raw document
+	; - icon_path ([str,str]) - an array of two string paths to fail[1] success[2] icon file Path
+	; - consequence_method (func) - a callback (function) that will be called when licensing fails
+	; - unconsequence_method (func) - a callback (function) that will be called when licensing succeeds
 	__new(user_name, custom_url, icon_path:=0, consequence_method:=0, unconsequence_method:=0){
-
-  		;check for default UserName (type = ConfigEntry obj)
-  		; if user_name = "dem0#1234"
-  		; 	this.prompt_user_name()
-
 
        	if !icon_path{ 	;sets default icon (in the "img" subfolder)
        		this.icon_path_unauth := "img\tray_unregistered.ico"
@@ -2899,7 +2903,8 @@ class LicenseTool{
        	this.auth:=0 							;auth default to assume that not authenticatedj
        	this._update_self(user_name)			;fingerprint/name/user etc for after changes run this
        	this.ip:= ""
-       	TraySetIcon(this.icon_path_unauth,,1)	;sets icon to show unauth
+		try
+       		TraySetIcon(this.icon_path_unauth,,1)	;sets icon to show unauth
 
        	; sets a timer to check authentication in a seperate thread after 2 Seconds
        	;;;;; no longer doing this on init
@@ -2909,28 +2914,32 @@ class LicenseTool{
        	this.unconsequence := unconsequence_method
 	}
 
+	; function rebuilds this.token_stack (from username and finger print)
 	_update_self(user_name:="dem0#1234"){
        	this.user_name := user_name "_" A_UserName "_"			;username +  PC name for token_stack
        	this.token_stack := this.user_name  this.fingerprint()	;builds local token "stack" string
 	}
 
-	prompt_user_name(){
-		; MsgBox "Please set your discord username (with #0000) in the settings", "New User"
-		; ;STATIC call for CARKA
-		; settings_obj.gui_open()
-		u:=InputBox("Welcome! Please set your discord username (with #0000)", "New User Detected",,"dem0#1234")
-		msgbox "Static reference to Settings_OBJ.c[dn].value"
-		;settings_obj.c["discord_name"].value := u
-		;settings_obj._save("discord_name", u)
-		this._update_self(u)
-		if LOG_LEVEL 
-			ToolTip "updating useranme => " this.user_name
+	; validates user input to meet requirements for username input
+	_validate_username(&u){
 	}
 
+	; queries user for their Discord Name
+	prompt_user_name(){
+		u:=InputBox("Welcome! Please set your discord username (with #0000)", "New User Detected",,"dem0#1234")
+		this._validate_username(&u)
+		this._update_self(u)
+		log( "DEBUG: updating useranme => " this.user_name)
+	}
+
+	; checks for user's fingerprint presence in auth haystack
+	; - silent_mode (bool) - allows it to run without disrupting user
+	; - new_user_name (str) - allows updating of the username at run time
     authenticate(silent_mode:=0, new_user_name:=""){
     	if new_user_name
     		this._update_self(new_user_name)
 
+		
        	if this.user_name = "dem0#1234_" A_UserName "_" or this.user_name = "_" A_UserName "_"{
        		if LOG_LEVEL
        			ToolTip "prompting from authenticate"
@@ -3033,11 +3042,11 @@ class LicenseTool{
     }
 
     encode(test_str := "any string from input args"){
-    	return CUL_encode(test_str)
+    	return CAL_encode(test_str)
     }
 
     decode(test_str := "any string from input args"){
-        return CUL_decode(test_str)
+        return CAL_decode(test_str)
     }
 }
 
@@ -3047,7 +3056,7 @@ class DiscordWebhook {
 
 	https://leovoel.github.io/embed-visualizer/   helps alot with building embed data
 	*/
-	__new(webhook, username:="DEFAULT_CUL->", default_settings:=True){
+	__new(webhook, username:="DEFAULT_CAL->", default_settings:=True){
 		this.webhook := webhook
 		this.user := username
 		this.default_settings := default_settings
@@ -3114,7 +3123,7 @@ class DiscordWebhook {
     	this.payload .= '"username":"'  ; open indicator for json username 
     	this.payload .= username  ; added username
     	this.payload .= '", "content":"'  ; adds label for content json
-    	this.payload .= this._clean_for_discord(content)  ; adds content
+    	this.payload .= this._clean_for_discord(&content)  ; adds content
     	this.payload .= '"}'  ; open json brackets
 
     	return this.payload
@@ -4321,7 +4330,7 @@ pixel_delta(p1,p2,delta_threshold:=50){
 	Return threshold_exceeded
 }
 
-CUL_decode(test_str := "any string from input args"){
+CAL_decode(test_str := "any string from input args"){
     ;dll info from https://docs.microsoft.com/en-us/windows/win32/api/wincrypt/nf-wincrypt-cryptbinarytostringw
 
     /*
@@ -4359,8 +4368,7 @@ CUL_decode(test_str := "any string from input args"){
         "UInt*", &test_str_decoded_length)
     {
         ; error
-        if LOG_LEVEL
-            MsgBox "error phase 1 decoding (code: " DllCall("GetLastError") ") " test_str
+        log( "ERR:CAL_decode: phase 1 decoding (code: " DllCall("GetLastError") ") " test_str)
     }
 
     ;now we actually encode the string to test_str_output which is a buffer of 2x the output length
@@ -4373,8 +4381,7 @@ CUL_decode(test_str := "any string from input args"){
         "UInt*", test_str_decoded_length)
     {
         ; error
-        if LOG_LEVEL 
-            ToolTip "error phase 2 decoding (code: " DllCall("GetLastError") ") " test_str          
+        log( "ERR:CAL_decode: phase 2 decoding (code: " DllCall("GetLastError") ") " test_str          )
     }
     ; msgbox(StrGet(test_str_output),"CUL Encoding()")
     ;clear carriage returns from concant
@@ -4386,7 +4393,7 @@ CUL_decode(test_str := "any string from input args"){
     ; Return single_line
 }
 
-CUL_encode(test_str := "any string from input args"){
+CAL_encode(test_str := "any string from input args"){
     ;DLL info from https://docs.microsoft.com/en-us/windows/win32/api/wincrypt/nf-wincrypt-cryptstringtobinaryw
     /*
     BOOL CryptStringToBinaryW(
@@ -4412,7 +4419,7 @@ CUL_encode(test_str := "any string from input args"){
     ;copies string to test_str_buffer"s address/ptr pointer (As best as i can tell)
     ;StrPut String, Target , Length , Encoding := None
     StrPut(test_str, test_str_buffer)
-    ; msgbox "Str: " test_str "`nptr: " test_str_buffer.ptr "`nsize: " test_str_buffer.Size
+    msgbox "Str: " test_str "`nptr: " test_str_buffer.ptr "`nsize: " test_str_buffer.Size
 
     ;now we run the call first to get the output length so we know how big to make the output buffersize
     return_value := DllCall("crypt32\CryptStringToBinaryW", 
@@ -4425,13 +4432,12 @@ CUL_encode(test_str := "any string from input args"){
 			                "Ptr",0)
     if !return_value{
         ; error
-        if LOG_LEVEL
-            ToolTip "error phase 1 encoding " test_str                
+        log("ERR:CAL_encode: phase 1 encoding " test_str       )         
     }
 
-    ;MsgBox "encodeing length = " test_str_encoded_length
+    MsgBox "encodeing length = " test_str_encoded_length
     ;now we actually encode the string to test_str_output which is length return above
-    test_str_output := Buffer(test_str_encoded_length)
+    test_str_output := Buffer(test_str_encoded_length*2)
     return_value := DllCall("crypt32\CryptStringToBinaryW", 
 			                "Ptr", test_str_buffer, 
 			                "UInt", 0, 
@@ -4442,9 +4448,14 @@ CUL_encode(test_str := "any string from input args"){
 			                "Ptr",0)
     if !return_value{
         ; error
-        if LOG_LEVEL
-            ToolTip "error phase 2 encoding (code: " DllCall("GetLastError") ") " test_str '`n`nINFO:`n234(0xEA) = ERROR_MORE_DATA (input str longer than buffer)`n13(0xD) = ERROR_INVALID_DATA The input data is invalid`n87(0x57) = ERROR_INVALID_PARAMETER'
-    }
+        log("ERR:CAL_encode: phase 2 encoding (code: " DllCall("GetLastError") ") " test_str '`n`nINFO:`n234(0xEA) = ERROR_MORE_DATA (input str longer than buffer)`n13(0xD) = ERROR_INVALID_DATA The input data is invalid`n87(0x57) = ERROR_INVALID_PARAMETER`n1784 (0x6F8) = ERROR_INVALID_USER_BUFFER (The supplied user buffer is not valid for the requested operation.)')
+        log("ERR:https://learn.microsoft.com/en-us/windows/win32/debug/system-error-codes")
+		
+
+		
+		
+		
+	}
     ; tooltip "test_str_encoded_length: " test_str_encoded_length
     Return StrGet(test_str_output, "UTF-8")
 }
@@ -4713,6 +4724,14 @@ log(in_str) {
 		(inStr(in_str,"ALERT") and LOG_LEVEL <= 8) or 
 		(inStr(in_str,"ERR") and LOG_LEVEL <= 9) or 
 		(inStr(in_str,"REPORT"))){
+			; this might slow down logging but trying for stability
+			; if (!FileExist(LOG_PATH)){
+			; 	SplitPath(LOG_PATH,,&make_this)
+			; 	MsgBox make_this
+			; 	DirCreate(make_this)
+
+			; }
+			; MsgBox(LOG_LEVEL "`n" LOG_PATH "`n" in_str)
 			in_str := String(in_str)
 			try{
 				FileAppend(FormatTime(A_Now,"yyyyMMdd HH:mm:ss") "|: " in_str "`n", LOG_PATH)
