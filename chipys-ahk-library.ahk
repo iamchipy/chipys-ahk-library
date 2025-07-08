@@ -90,6 +90,42 @@ class ActionStepStructure extends Array
 	}
 }
 
+; ActionSqueneces is an Array of Action objects
+; Expects:
+;   sequence - Array of Actions objects
+;   reset_condition - Condition object
+class ActionSequence extends Array {
+	__new(sequence := [], reset_condition := Condition("example", place_holder), reset_on_each_step := false, reset_to_start := true) {
+		this.reset_condition := reset_condition
+		this.last_executed := 0
+		this.sequence := sequence
+	}
+
+	is_ready(params*) {
+		if this.reset_condition && this.reset_condition.HasMethod("execute_stored_function")
+			return this.reset_condition(params*)
+		; if we do not have valid reset conditions we return false
+		return false
+	}
+
+	next(params*) {
+		if this.is_ready(params*) {
+			this.last_executed += 1
+			return this.return_index(this.last_executed)
+		}
+	}
+
+	return_index(i) {
+		len := this.sequence.Length
+		if len < 1
+			throw IndexError "ActionSquences failed to return invalid index(" i ")"
+		mod_i := Mod(i, len)
+		if this.sequence.Has(mod_i)
+			return this.sequence[mod_i]
+		return 0
+	}
+}
+
 ; Define a base class to encapsulate the deferred call logic.
 ; Allowing for functions to store methods provided at instantiation.
 class DeferredCaller
@@ -124,11 +160,6 @@ class DeferredCaller
 		; MsgBox "Function reference stored successfully."
 		return true
 	}
-
-	; ; Simple alias for execute_stored_function(params*)
-	; do(index := "default", params*) {
-	; 	this.execute_stored_function(index, params)
-	; }
 
 	; Method to execute the stored function at a later "date".
 	; Any parameters passed to this method will be forwarded to the stored function.
@@ -182,7 +213,6 @@ class DeferredCaller
 		}
 	}
 }
-
 
 ; Conditions describe the check that needs to happen before an action is given a green-light
 ; Expects:
@@ -240,48 +270,11 @@ class Action extends DeferredCaller {
 	}
 }
 
-; ActionSqueneces is an Array of Action objects
-; Expects:
-;   sequence - Array of Actions objects
-;   reset_condition - Condition object
-class ActionSequence extends Array {
-	__new(sequence := [], reset_condition := Condition("example", place_holder), reset_on_each_step := false, reset_to_start := true) {
-		this.reset_condition := reset_condition
-		this.last_executed := 0
-		this.sequence := sequence
-	}
-
-	is_ready(params*) {
-		if this.reset_condition && this.reset_condition.HasMethod("execute_stored_function")
-			return this.reset_condition(params*)
-		; if we do not have valid reset conditions we return false
-		return false
-	}
-
-	next(params*) {
-		if this.is_ready(params*) {
-			this.last_executed += 1
-			return this.return_index(this.last_executed)
-		}
-	}
-
-	return_index(i) {
-		len := this.sequence.Length
-		if len < 1
-			throw IndexError "ActionSquences failed to return invalid index(" i ")"
-		mod_i := Mod(i, len)
-		if this.sequence.Has(mod_i)
-			return this.sequence[mod_i]
-		return 0
-	}
-}
-
-
 ; RichPixel
 ; - Object to acts as data struc for pixels
 ; - - storing things like x,y with color
 class RichPixel {
-	__new(color := 0, x := 0, y := 0, z := 0, meta:="") {
+	__new(color := 0, x := 0, y := 0, z := 0, meta := "") {
 		this.color := color
 		this.c := color
 		this.x := x
@@ -374,27 +367,27 @@ class RichPixel {
 	; checks for presents of pixel with current meta data
 	; MODE = FALSE"GetPixelColer" or TRUE"PixelSearch"
 	; returns bool
-    is_present(variation:=0, show_debug:=false, alt_method:=false, search_radius:=2){
-		if alt_method{
-			res := this.find(search_radius,variation)
-		}else{
-			current_color :=  this.read()
+	is_present(variation := 0, show_debug := false, alt_method := false, search_radius := 2) {
+		if alt_method {
+			res := this.find(search_radius, variation)
+		} else {
+			current_color := this.read()
 			res := this.match(current_color, variation)
 		}
 		if show_debug
-			log("DEBUG: RichPixel.is_present()>> " current_color "  " res "  " this.color )
-		if res{
+			log("DEBUG: RichPixel.is_present()>> " current_color "  " res "  " this.color)
+		if res {
 			return true
 		}
-        return false
-    }	
+		return false
+	}
 
-	coords(){
+	coords() {
 		return [this.x, this.y]
 	}
 
 	; updates the coordinates to be whatever was provided
-	update(coords:=[0,0], color:=0){
+	update(coords := [0, 0], color := 0) {
 		if color
 			this.color := color
 
@@ -408,11 +401,11 @@ class RichPixel {
 	; updates the coordinated by the amount provided (aka relative update)
 	; -x moves left
 	; -y moves up
-	move(difference:=[0,0]){
-		x:= this.x+difference[1]
-		y:= this.y+difference[2]
-		this.update([x,y])
-		return [this.x,this.y]
+	move(difference := [0, 0]) {
+		x := this.x + difference[1]
+		y := this.y + difference[2]
+		this.update([x, y])
+		return [this.x, this.y]
 	}
 
 	; value_to_match: str | 0xFFFFFF format from pixelGetColor
@@ -429,24 +422,23 @@ class RichPixel {
 	}
 
 	; reads the current color of this pixel
-	read(){
+	read() {
 		return PixelGetColor(this.x, this.y)
 	}
 
 	; searching an area for the a color match
-	find(area:=2,variation:=0){
-		return PixelSearch(&x,&y,this.x-area, this.y-area,this.x+area, this.y+area,this.color,variation)
-	}	
-	
+	find(area := 2, variation := 0) {
+		return PixelSearch(&x, &y, this.x - area, this.y - area, this.x + area, this.y + area, this.color, variation)
+	}
+
 	; patches/remembers the current pixel as the cached/intended color
-	patch(){
+	patch() {
 		color := this.read()
-		this.update(,color)
+		this.update(, color)
 		return color
 	}
 
 }
-
 
 ; # MetaInfo
 ; Class to manage info about the app, mostly for internal use
@@ -455,13 +447,13 @@ class RichPixel {
 ; - display_name (str) - a reader friendly display name for the app
 ; - custom_icon_path
 class MetaInfo {
-	__New(	app_version := "0.0.1",
-			file_name := "DefaultAppName.exe", 
-			display_name := "Default App Name", 
-			custom_icon_path := "ChipyLogo.png", 
-			target_window_name := "A", 
-			config_path := "CAL.cfg") {
-			
+	__New(app_version := "0.0.1",
+		file_name := "DefaultAppName.exe",
+		display_name := "Default App Name",
+		custom_icon_path := "ChipyLogo.png",
+		target_window_name := "A",
+		config_path := "CAL.cfg") {
+
 		this.app_version := app_version
 		this.file_name := file_name
 		this.display_name := display_name
@@ -470,103 +462,6 @@ class MetaInfo {
 		this.config_path := config_path
 	}
 
-}
-
-; # TrayBuilder
-; Class to help keep all my common tray menu settings in one place for easy management
-class TrayBuilder {
-	; New instantiations
-	__New(meta_info_obj := "", remove_defaults := true, run_on_startup := true, as_admin:=true) {
-		if meta_info_obj == "" {
-			this.meta_info_obj := MetaInfo()
-		} else {
-			this.meta_info_obj := meta_info_obj
-		}
-
-		; now we execute the building of the tray
-		try {
-			if remove_defaults {
-				; clear all SysTray items (AKA remove defaults)
-				a_traymenu.delete()
-			} else {
-				; add a spacers if we aren't clearing defaults
-				a_traymenu.add()
-			}
-
-			this._set_icon_boot()
-
-			this._create_title()
-
-			this._create_on_startup(run_on_startup)
-
-			this._create_reload_as_admin(as_admin)
-
-			;# UNDERCONSTRUCTION
-			; ; add common options
-			; if run_on_startup
-			; 	a_traymenu.add("Update", download_update.bind())
-
-
-			; a_traymenu.add()
-			; a_traymenu.add("Tech: " my_name, tray_name.bind())
-			; a_traymenu.add("SIIP: " siip_related_to, tray_siip.bind())
-			; a_traymenu.add("Hotkey: " hotkey_str, tray_hotkey.bind())
-			; a_traymenu.add()
-			A_TrayMenu.add("Restart", reload_alias.bind())
-			A_TrayMenu.add("Exit", exit_alias.bind())
-
-		} catch Error as e {
-			MsgBox "Something went wrong with the custom systemtray building (reverting to defaults)`n`n" e.Message "`n" e.Extra
-			;TODO-MED build default tray here
-		}
-	}
-
-	_set_icon_boot() {
-		TraySetIcon(this.meta_info_obj.custom_icon_path)
-	}
-
-	_create_title(set_default := true) {
-		title_str := this.meta_info_obj.display_name " v" this.meta_info_obj.app_version
-		a_traymenu.add(title_str, null_func) ;https://www.autohotkey.com/docs/v2/lib/Menu.htm#Add
-		if set_default
-			a_traymenu.default := title_str
-
-	}
-
-	_create_on_startup(run_on_startup) {
-		if run_on_startup {
-			a_traymenu.add("Run on Startup", (*) => run_script_on_startup("toggle"))
-			if run_script_on_startup()
-				a_traymenu.check("Run on Startup")
-		}
-	}
-
-	_create_reload_as_admin(as_admin_flag) {
-		if as_admin_flag {
-			a_traymenu.add("Reload as Admin", (*) => reload_as_admin())
-			
-			if is_script_elevated()
-				a_traymenu.check("Reload as Admin")
-		}
-	}
-
-	; # create_menu
-	; - creates a tray entry
-	; DEV UNSTABLE
-	create(name_str := "Example", function_pointer := null_func) {
-		log("SPAM: TrayBuilder adding: '" name_str "' pointer_type::" Type(function_pointer))
-		
-		if Type(function_pointer) = "Closure"{
-			function_pointer := function_pointer.Call
-			log("DEBUG: TrayBuilder converted " Type(function_pointer) " to .Call")
-		}
-			
-		; handle creation of spacers
-		if name_str == "-"
-			A_TrayMenu.Add()
-		else
-			A_TrayMenu.Add(name_str, function_pointer)
-	}
 }
 
 
@@ -678,7 +573,7 @@ class UpdateHandler {
 			download this.download_url, A_ScriptDir "\" this.script_name ".new"
 			try {
 				download this.download_url "_img.zip", A_WorkingDir "\" script_name ".exe_img.zip"
-				this._unzip(A_WorkingDir "\" script_name ".exe_img.zip", A_WorkingDir "\img")  ;TODO possible dynamic file path inconsistancy
+				this._unzip(A_WorkingDir "\" script_name ".exe_img.zip", A_WorkingDir "\img")  ; #TODO possible dynamic file path inconsistancy
 			} catch {
 				log("ERR:prompt_update()>Trouble downloading _img ")
 			}
@@ -1060,8 +955,8 @@ class RealTimeAlgoGUI {
 				disp("m=" SubStr(t[1], -2, 2), 3)
 
 				t := [SubStr(t[1], 1, -4),
-				SubStr(t[1], -4, 2),
-				SubStr(t[1], -2, 2)]
+					SubStr(t[1], -4, 2),
+					SubStr(t[1], -2, 2)]
 			}
 
 			time_in_minutes := 0
@@ -1465,8 +1360,8 @@ class ConfigManagerTool {
 		if !this.tray_builder
 			return false
 
-		open_gui_func_closure_storage_variable := ()=> this.gui_open(this)
-		this.tray_builder.create(this.section,()=> this.gui_open(this))
+		open_gui_func_closure_storage_variable := () => this.gui_open(this)
+		this.tray_builder.create(this.section, () => this.gui_open(this))
 	}
 
 	; Method to changes the value of a single ConfigEntry object (with the flag to update hotkey too)
@@ -1619,7 +1514,7 @@ class ConfigManagerTool {
 		try			;checks if gui object exists and closes incase double opening
 			this.gui.Destroy()
 
-		; loop args.length	
+		; loop args.length
 		; 	MsgBox A_Index " " type(args[A_Index]) " " args[A_Index]
 		; MsgBox Type(this)
 		; MsgBox this
@@ -1650,7 +1545,7 @@ class ConfigManagerTool {
 				this.gui.Add(obj.type, "xp+30 w" round(GUI_FONT_SIZE * 10) " v" key " checked" obj.value, "default: " obj.default)
 			if obj.type = "edit" or obj.type = "hotkey"
 				this.gui.Add(obj.type, "xp+30 w" round(GUI_FONT_SIZE * 10) " v" key, obj.value)
-			; TODO figure out how to do this for non niche cases to improve library
+			; #TODO figure out how to do this for non niche cases to improve library
 			if obj.type = "DropDownList" {
 				temp := this.gui.Add(obj.type, "lowercase altsubmit xp+30 w200 v" key " choose" obj.value, obj.pipelist)
 				temp.OnEvent("change", (obj_of_event, *) => this.gui_apply_preset(obj_of_event))
@@ -1815,7 +1710,7 @@ class ConfigManagerTool {
 	}
 
 	gui_apply_action_wheel_value(obj_of_event, key, args*) {
-		; TODO infuture build this into some kind of direct gui change rather than reloading entire gui
+		; #TODO infuture build this into some kind of direct gui change rather than reloading entire gui
 		this.c[key].value := iniread(this.fn, "action_wheel_presets", obj_of_event.Text)
 
 		this.gui_close()
@@ -1983,7 +1878,7 @@ class ConfigManagerTool {
 		}
 	}
 
-	_save(key, value, legacy_custom_section:="no_longer_used") {
+	_save(key, value, legacy_custom_section := "no_longer_used") {
 		this.wrong_type_handler(key, value)
 		; this.c[key].value := value
 		this.c[key]._save(value)
@@ -2344,7 +2239,7 @@ class Tool {
 
 			; if DEBUG
 			; 	tooltip "setting timer for '" this.hrid "' of type [" this.type "]`n" this.coords[1] ":" this.coords[2]
-			;handles timer start and resets(TODO add reset somehow/ refresh timer)
+			;handles timer start and resets(#TODO add reset somehow/ refresh timer)
 			SetTimer this.hide_timer, this.duration
 		}
 
@@ -2353,7 +2248,7 @@ class Tool {
 				this.gui_handles[i] := gui("+toolwindow +AlwaysOnTop -Caption +Disabled +LastFound -DPIScale")
 
 			if is_tile {						;handles colours for tiles, non-tiles(gui) and auto color pick from point if no color
-				;TODO create border on tile indicating if correct color is present
+				;#TODO create border on tile indicating if correct color is present
 				; current_pix_color := PixelGetColor(this.coords[1], this.coords[2])
 				; if
 				if this.target_color		;if target color defined (AKA not defaulted to 0)
@@ -2502,7 +2397,8 @@ class Tool {
 	}
 }
 
-class Action {
+; Refactored name of previous "class Action{"
+class InputAction {
 	__New(frequency := 1000, key_to_press := "1") {
 		if frequency == 0
 			this.disabled := 1
@@ -2634,7 +2530,7 @@ class ScenarioDetector {
 
 	}
 
-	; TODO likely needs to be removed/reworked but left for legacy support
+	; #TODO likely needs to be removed/reworked but left for legacy support
 	_refine_coords(refine_array := 0) { ;update offset/win(refine_array) & 'live' with prop[]ratios+offset
 		; if !WinExist(this.client_name){
 		; 	disp(this.hrid " could not find ARK window")			;STATIC
@@ -3100,7 +2996,7 @@ class ScenarioDetector {
 			; this._refine_coords()
 
 			; ; try{
-			; 	; TODO remove IMFV and use GUI creation https://www.autohotkey.com/boards/viewtopic.php?f=6&t=3806
+			; 	; #TODO remove IMFV and use GUI creation https://www.autohotkey.com/boards/viewtopic.php?f=6&t=3806
 
 			; 	if !FileExist(a_workingdir this.file_name)
 			; 		MsgBox "Image file appear to be missing from path below. You might need to download the required imgPack from www.chipy.dev `n`n" a_workingdir this.file_name
@@ -3280,7 +3176,7 @@ class UpdateTool {
 	; 		CULErrorHandler(e, "update-tool-")
 	; 	}
 	; 	if(!ldata){
-	; 		;TODO reduce msgbox interupts
+	; 		; #TODO reduce msgbox interupts
 	; 		MsgBox "Could not connect to remote server!`r`nUnable to update.`r`nerror 433: while trying to check remote version "
 	; 		Return 0
 	; 	}
@@ -3639,7 +3535,7 @@ class DependencyManager {
 			this._add(n, fi, u)
 		}
 
-		/* improved method TODO apply new method and rebuild ini structure
+		/* improved method #TODO apply new method and rebuild ini structure
 		; read section from ini file
 		ini_section := iniread( this.fn, this.section)
 		; split sction into lines
@@ -3703,7 +3599,7 @@ class DependencyManager {
 			dircreate OutDir
 			; MsgBox "creating " OutDir
 		}
-		; add try block and TODO https://github.com/sgmsm/c2_public/raw/master/img/tray_loaded.ico
+		; add try block and #TODO https://github.com/sgmsm/c2_public/raw/master/img/tray_loaded.ico
 		fixed_url := strreplace(file_url, "\", "/")
 		log("WARN: GENERIC_MISSING_ELEMENT_MSGBOX(file_name)")
 		Return
@@ -3855,7 +3751,7 @@ class UITool {
 			this.ui.setfont("s" round(GUI_FONT_SIZE * 0.5), "Bahnschrift")
 			this.changelog := this.ui.add("edit", "r14 w600", this.txt)  ; +Disabled (removed because can't scroll)
 			ControlFocus this.changelog
-			;this.changelog.color("666666") TODO
+			;this.changelog.color("666666") # TODO
 
 			this.ui.setfont("c00cccc s" round(GUI_FONT_SIZE * 0.8) " q3", "Terminal")				; new gui style with gray and teal
 			this.ui.addbutton(, "Yes").OnEvent("click", (*) => this.yes(if_yes_object))
@@ -3890,36 +3786,36 @@ class ImageTool {
 	static find_image(LFN, x1 := "None", y1 := "None", x2 := "None", y2 := "None", LocalTol := 50, scaler := 0) {
 		; handles defaults
 		(x1 == "None") ? (x1 := 0) : x1 := x1  ; if x1 = none set to 0 else  leave it
-			(y1 == "None") ? (y1 := 0) : y1 := y1
-				(x2 == "None") ? (x2 := A_ScreenWidth) : x2 := x2
-					(y2 == "None") ? (y2 := A_ScreenHeight) : y2 := y2
+		(y1 == "None") ? (y1 := 0) : y1 := y1
+		(x2 == "None") ? (x2 := A_ScreenWidth) : x2 := x2
+		(y2 == "None") ? (y2 := A_ScreenHeight) : y2 := y2
 
-						fn := False
-						if FileExist(LFN)
-							fn := LFN
-						else if FileExist(SubStr(LFN, 2))
-							fn := SubStr(LFN, 2)
-						else if FileExist(A_WorkingDir LFN)
-							fn := A_WorkingDir LFN
+		fn := False
+		if FileExist(LFN)
+			fn := LFN
+		else if FileExist(SubStr(LFN, 2))
+			fn := SubStr(LFN, 2)
+		else if FileExist(A_WorkingDir LFN)
+			fn := A_WorkingDir LFN
 
-						;MsgBox SubStr(LFN, 2) '`n'   LFN "`n" fn
-						Try
-						{
-							if scaler {		;if scaler was given, then we need to do a modified image search
-								if (ImageSearch(&foundX, &foundY, x1, y1, x2, y2, "*TransBlack *" LocalTol " *w" Integer(scaler[1]) " *h-1 " fn))
-								{
-									Return [foundX, foundY]
-								}
-							} else {
-								if (ImageSearch(&foundX, &foundY, x1, y1, x2, y2, "*TransBlack *" LocalTol " " fn))
-								{
-									Return [foundX, foundY]
-								}
-							}
-						}
-						catch any as exc
-							MsgBox "CUL:ERR: Could not image search:`n" exc.Message "`n" exc.what "`n`npossible causes:`n" "*TransBlack *" LocalTol " *h-1 *w" Integer(scaler[1]) " " fn "`nFile might be missing"
-						Return False
+		;MsgBox SubStr(LFN, 2) '`n'   LFN "`n" fn
+		Try
+		{
+			if scaler {		;if scaler was given, then we need to do a modified image search
+				if (ImageSearch(&foundX, &foundY, x1, y1, x2, y2, "*TransBlack *" LocalTol " *w" Integer(scaler[1]) " *h-1 " fn))
+				{
+					Return [foundX, foundY]
+				}
+			} else {
+				if (ImageSearch(&foundX, &foundY, x1, y1, x2, y2, "*TransBlack *" LocalTol " " fn))
+				{
+					Return [foundX, foundY]
+				}
+			}
+		}
+		catch any as exc
+			MsgBox "CUL:ERR: Could not image search:`n" exc.Message "`n" exc.what "`n`npossible causes:`n" "*TransBlack *" LocalTol " *h-1 *w" Integer(scaler[1]) " " fn "`nFile might be missing"
+		Return False
 	}
 
 	get_image_size(given_file_name) {
@@ -4093,7 +3989,7 @@ class CULErrorHandler {
 	}
 }
 
-; TODO to be moved out of CUL
+; # TODO to be moved out of CUL
 class UE4Coord {
 	__new(clipboard_str := "0 0 0 0 0") {
 		try {
@@ -4296,8 +4192,8 @@ class UE4CoordHandler {
 		csv_str := "x y z yaw pitch`n"
 		loop array_of_coord.Length - 1 {
 			temp := this._extract_calabration_from(UE4Coord(array_of_coord[A_Index]),
-			UE4Coord(array_of_coord[A_Index + 1]),
-			UE4Coord(array_of_following_move[A_Index]))
+				UE4Coord(array_of_coord[A_Index + 1]),
+				UE4Coord(array_of_following_move[A_Index]))
 			csv_str .= temp._to_string() "`n"
 		}
 
@@ -4632,13 +4528,13 @@ coord_pair_rescale_for_new_res(coord_pair, baseline_res := 0, client_name := "A"
 	; apply rescaling math and return
 	if coord_pair.Length = 2 {
 		Return [round(client_res[1] * (coord_pair[1] / baseline_res[1])),
-		round(client_res[2] * (coord_pair[2] / baseline_res[2]))]
+			round(client_res[2] * (coord_pair[2] / baseline_res[2]))]
 	}
 	if coord_pair.Length = 4 {
 		Return [round(client_res[1] * (coord_pair[1] / baseline_res[1])),
-		round(client_res[2] * (coord_pair[2] / baseline_res[2])),
-		round(client_res[1] * (coord_pair[3] / baseline_res[1])),
-		round(client_res[2] * (coord_pair[4] / baseline_res[2]))]
+			round(client_res[2] * (coord_pair[2] / baseline_res[2])),
+			round(client_res[1] * (coord_pair[3] / baseline_res[1])),
+			round(client_res[2] * (coord_pair[4] / baseline_res[2]))]
 	}
 
 	; discontinuing UI scaling for ARK(would need to move to it's own function)
@@ -5071,13 +4967,13 @@ reload_alias(*) {
 }
 
 ; checks if script is elevated OR has the '/restart' flag in to stop rebootloop
-is_script_elevated(){
+is_script_elevated() {
 	full_command_line := DllCall("GetCommandLine", "str")
 	return (A_IsAdmin or RegExMatch(full_command_line, " /restart(?!\S)"))
 }
 
 ; runs script (self) with full path if not alrdy (checks for compiled and runs fullpath)
-reload_as_admin(){
+reload_as_admin() {
 	if not is_script_elevated()
 	{
 		try
@@ -5088,7 +4984,7 @@ reload_as_admin(){
 				Run '*RunAs "' A_AhkPath '" /restart "' A_ScriptFullPath '"'
 		}
 		ExitApp
-	}	
+	}
 }
 
 ; Simple wrapper to support Tray and other references to reload as a function
@@ -5216,13 +5112,13 @@ log(in_str) {
 	global LOG_LEVEL, LOG_PATH
 	; ; check log levels and filter
 	if ((inStr(in_str, "SPAM") and LOG_LEVEL <= 0) or
-	(!inStr(in_str, "SPAM") and LOG_LEVEL <= 1) or
-	(inStr(in_str, "DEBUG") and LOG_LEVEL <= 2) or
-	(inStr(in_str, "INFO") and LOG_LEVEL <= 4) or
-	(inStr(in_str, "WARN") and LOG_LEVEL <= 6) or
-	(inStr(in_str, "ALERT") and LOG_LEVEL <= 8) or
-	(inStr(in_str, "ERR") and LOG_LEVEL <= 9) or
-	(inStr(in_str, "REPORT"))) {
+		(!inStr(in_str, "SPAM") and LOG_LEVEL <= 1) or
+		(inStr(in_str, "DEBUG") and LOG_LEVEL <= 2) or
+		(inStr(in_str, "INFO") and LOG_LEVEL <= 4) or
+		(inStr(in_str, "WARN") and LOG_LEVEL <= 6) or
+		(inStr(in_str, "ALERT") and LOG_LEVEL <= 8) or
+		(inStr(in_str, "ERR") and LOG_LEVEL <= 9) or
+		(inStr(in_str, "REPORT"))) {
 		; this might slow down logging but trying for stability
 		; if (!FileExist(LOG_PATH)){
 		; 	SplitPath(LOG_PATH,,&make_this)
