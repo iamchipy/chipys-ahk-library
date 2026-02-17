@@ -778,7 +778,7 @@ class UpdateHandler {
 	}
 
 	_write_ps1_unzip_and_run(unzip_path, ps1_name := "unzip_and_run") {
-		ps1_str := 'Stop-Process -Name "' A_ScriptFullPath '"`n'
+		ps1_str := 'Stop-Process -Name "' this.script_name '"`n'
 		ps1_str .= 'if(Test-Path -Path "' A_WorkingDir '\' this.script_name '.old") {Remove-Item "' A_WorkingDir '\' this.script_name '.old"}`n'
 		ps1_str .= 'while(Test-Path -Path "' A_ScriptFullPath '"){`n'
 		ps1_str .= 'Rename-Item -Path "' A_ScriptFullPath '" -NewName "' A_WorkingDir '\' this.script_name '.old" -force`n'
