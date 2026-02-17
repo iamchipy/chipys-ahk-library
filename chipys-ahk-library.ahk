@@ -12,14 +12,16 @@ Support my Root Beer addiction if you want <3
 https://www.paypal.com/donate/?hosted_button_id=KEYF8KWYJYSFU
 ==============================================================================================================
 */
-;should be able to find it in (autohotkey.com/download/2.0/)
-if A_AhkVersion != "2.0.10" and !A_IsCompiled  ;no longer logical here: and silent_mode!=True
-	msgbox "You are running AHK v" A_AhkVersion "`n`rHowever CAL was written for v2.0.8`n`nYou may need to download that exact version from autohotkey.com/download/2.0/ if you experince issue in the code"
-
+;should be able to find it in (https://www.autohotkey.com/download/2.0/ // https://www.autohotkey.com/download/ahk-v2.exe)
+if A_AhkVersion != "2.0.19" and !A_IsCompiled {  ;no longer logical here: and silent_mode!=True
+	version_update_warning_user_response := msgbox("You are running AHK v" A_AhkVersion "`n`rHowever CAL was written for v2.0.19`n`nYou may need to download that exact version from https://www.autohotkey.com/download/2.0/ if you experince issue in the code (https://www.autohotkey.com/download/ahk-v2.exe).`n`nWould you like to be redirected to download the lastest version from the above listed URL?", "AHK2 library version mismatch", 0x4)
+	if version_update_warning_user_response = "Yes"
+		run "https://www.autohotkey.com/download/ahk-v2.exe"
+}
 ;=======================================================
 ; CONSTANTS and FLAGS
 ;=======================================================
-global CAL_VERSION := "4.07"
+global CAL_VERSION := "5.04"
 global ROAMING := A_AppData "\Chipys-AHK-Library"
 global GUI_FONT_SIZE := "20"		;scaled of base of 20
 global NATO_UI_FONT := "Share Tech Mono.ttf"
@@ -28,6 +30,20 @@ SendMode "Event"
 CoordMode "pixel", "Screen"
 CoordMode "Mouse", "Screen"
 CoordMode "ToolTip", "Screen"
+
+;=======================================================
+; Hotkeys
+; https://www.autohotkey.com/docs/v2/Hotkeys.htm
+;=======================================================
+HOTKEY_CHEATSHEET := "AHK2 Hotkey Modifiers:`n"
+HOTKEY_CHEATSHEET .= "WIN = #`n"
+HOTKEY_CHEATSHEET .= "Alt = !`n"
+HOTKEY_CHEATSHEET .= "CTR = ^`n"
+HOTKEY_CHEATSHEET .= "SHF = ^`n"
+HOTKEY_CHEATSHEET .= "Pair= &`n"
+HOTKEY_CHEATSHEET .= "Mouse Buttons:`n"
+HOTKEY_CHEATSHEET .= "LBUTTON, MBUTTON, RBUTTON`n"
+
 
 ;=======================================================
 ; CONSTANTS with defaults, expected to be overwritten by scripts
@@ -74,6 +90,123 @@ global ticker := "-"
 ; OnError("CUL_err_to_file")
 
 
+; JSON parsing class
+class json {
+	; __new(raw_json_string){
+	; 	this.raw := raw_json_string
+	; }
+
+	load_string(src, args*) {
+		; COPIED FROM "The Arkive" github.com/TheArkive/JXON_ahk2/blob/master/_JXON.ahk
+		key := "", is_key := false
+		stack := [tree := []]
+		next := '"{[01234567890-tfn'
+		pos := 0
+
+		while ((ch := SubStr(src, ++pos, 1)) != "") {
+			if InStr(" `t`n`r", ch)
+				continue
+			if !InStr(next, ch, true) {
+				testArr := StrSplit(SubStr(src, 1, pos), "`n")
+
+				ln := testArr.Length
+				col := pos - InStr(src, "`n", , -(StrLen(src) - pos + 1))
+
+				msg := Format("{}: line {} col {} (char {})"
+					, (next == "") ? ["Extra data", ch := SubStr(src, pos)][1]
+					: (next == "'") ? "Unterminated string starting at"
+					: (next == "\") ? "Invalid \escape"
+					: (next == ":") ? "Expecting ':' delimiter"
+					: (next == '"') ? "Expecting object key enclosed in double quotes"
+					: (next == '"}') ? "Expecting object key enclosed in double quotes or object closing '}'"
+					: (next == ",}") ? "Expecting ',' delimiter or object closing '}'"
+					: (next == ",]") ? "Expecting ',' delimiter or array closing ']'"
+					: ["Expecting JSON value(string, number, [true, false, null], object or array)"
+						, ch := SubStr(src, pos, (SubStr(src, pos) ~= "[\]\},\s]|$") - 1)][1]
+					, ln, col, pos)
+
+				throw Error(msg, -1, ch)
+			}
+
+			obj := stack[1]
+			is_array := (obj is Array)
+
+			if i := InStr("{[", ch) { ; start new object / map?
+				val := (i = 1) ? Map() : Array()	; ahk v2
+
+				is_array ? obj.Push(val) : obj[key] := val
+				stack.InsertAt(1, val)
+
+				next := '"' ((is_key := (ch == "{")) ? "}" : "{[]0123456789-tfn")
+			} else if InStr("}]", ch) {
+				stack.RemoveAt(1)
+				next := (stack[1] == tree) ? "" : (stack[1] is Array) ? ",]" : ",}"
+			} else if InStr(",:", ch) {
+				is_key := (!is_array && ch == ",")
+				next := is_key ? '"' : '"{[0123456789-tfn'
+			} else { ; string | number | true | false | null
+				if (ch == '"') { ; string
+					i := pos
+					while i := InStr(src, '"', , i + 1) {
+						val := StrReplace(SubStr(src, pos + 1, i - pos - 1), "\\", "\u005C")
+						if (SubStr(val, -1) != "\")
+							break
+					}
+					if !i ? (pos--, next := "'") : 0
+						continue
+
+					pos := i ; update pos
+
+					val := StrReplace(val, "\/", "/")
+					val := StrReplace(val, '\"', '"')
+						, val := StrReplace(val, "\b", "`b")
+						, val := StrReplace(val, "\f", "`f")
+						, val := StrReplace(val, "\n", "`n")
+						, val := StrReplace(val, "\r", "`r")
+						, val := StrReplace(val, "\t", "`t")
+
+					i := 0
+					while i := InStr(val, "\", , i + 1) {
+						if (SubStr(val, i + 1, 1) != "u") ? (pos -= StrLen(SubStr(val, i)), next := "\") : 0
+							continue 2
+
+						xxxx := Abs("0x" . SubStr(val, i + 2, 4)) ; \uXXXX - JSON unicode escape sequence
+						if (xxxx < 0x100)
+							val := SubStr(val, 1, i - 1) . Chr(xxxx) . SubStr(val, i + 6)
+					}
+
+					if is_key {
+						key := val, next := ":"
+						continue
+					}
+				} else { ; number | true | false | null
+					val := SubStr(src, pos, i := RegExMatch(src, "[\]\},\s]|$", , pos) - pos)
+
+					if IsInteger(val)
+						val += 0
+					else if IsFloat(val)
+						val += 0
+					else if (val == "true" || val == "false")
+						val := (val == "true")
+					else if (val == "null")
+						val := ""
+					else if is_key {
+						pos--, next := "#"
+						continue
+					}
+
+					pos += i - 1
+				}
+
+				is_array ? obj.Push(val) : obj[key] := val
+				next := obj == tree ? "" : is_array ? ",]" : ",}"
+			}
+		}
+
+		return tree[1]
+	}
+}
+
 ; Struct for mouse actions
 ; x,y,button,drag
 class ActionStepStructure extends Array
@@ -95,7 +228,7 @@ class ActionStepStructure extends Array
 ;   sequence - Array of Actions objects
 ;   reset_condition - Condition object
 class ActionSequence extends Array {
-	__new(sequence := [], reset_condition := Condition("example", place_holder), reset_on_each_step := false, reset_to_start := true) {
+	__new(sequence := [], reset_condition := 'Condition("example", place_holder)', reset_on_each_step := false, reset_to_start := true) {
 		this.reset_condition := reset_condition
 		this.last_executed := 0
 		this.sequence := sequence
@@ -269,6 +402,7 @@ class Action extends DeferredCaller {
 		this.success := this.execute_stored_function()
 	}
 }
+
 
 ; RichPixel
 ; - Object to acts as data struc for pixels
@@ -464,7 +598,6 @@ class MetaInfo {
 
 }
 
-
 ; # UpdateHandler
 ; class to group handling script version checks, updates, and downloading updates/assets.
 ; When created it will ping the version file, passively wait, compare version, then notify user
@@ -477,55 +610,141 @@ class MetaInfo {
 ; - - Example: https://chipy.dev/download/cammm.exe > Expectes https://chipy.dev/download/cammm.exe_version.txt to exist
 ; - scritp_name(str) - should be the name of your exe (without the .exe extention)
 ; - display_name(str) - should be the reader friendly display name of your script
+; Notifications
+; - Toaster notificaiton of being on latest version controlled by LOG_LEVE < 1
+; - Toaster notifications are enforced when manually called
 class UpdateHandler {
 
-	__new(download_url, current_version, script_name := "DefaultScriptName", display_name := "DefaultDisplayName") {
+	__new(download_url := "", current_version := "0.0.1", script_name := "DefaultScriptName", display_name := "DefaultDisplayName", github_repo := "", github_user := "iamchipy") {
 		; build variables and set defaults
 		this.version_file_url := download_url "_version.txt"
 		this.script_name := script_name
 		this.download_url := download_url
 		this.display_name := display_name
 		this.current_version := current_version
+		this.github_repo := github_repo
+		this.github_user := github_user
+
 
 		; start the query for cloud version
-		this._query_latest_version_then_callback(this.version_file_url, (*) => this.compare_versions_and_notify())
+		this.check_for_updates()
+		; this._query_latest_version_then_callback(this.version_file_url, (*) => this.compare_versions_and_notify())
 	}
 
-	_query_latest_version_then_callback(version_file_url, callback_function) {
-		; send a GET request to version_file_url then sets a callback
-		this.com_obj := ComObject("Msxml2.XMLHTTP")  ; used to make URL requests
-		this.com_obj.open("GET", version_file_url, true)
-		this.com_obj.onreadystatechange := callback_function
-		this.com_obj.send()
-	}
+	; Public function to be called for checking versions and also forced notification control
+	check_for_updates(force_notification := false) {
+		try {
+			this.latest_version := this._github_release_version()
+			this._github_compare_and_notify_user(force_notification)
 
-	; Used as the callback listener for update request. Then compares versions and pings user
-	compare_versions_and_notify() {
-		; check if callback has a completed state
-		if (this.com_obj.readyState != 4) {  ; Not done yet.
-			return
+		} catch Any as e {
+			log("ERROR: UpdateHandler:: Autorun failed:: AutoExe failed with:: " e.Message)
 		}
-		; check if http code is a success (200)
-		if (this.com_obj.status == 200) {
-			; skim off and line returns
-			cloud_version := strsplit(this.com_obj.responseText, "`r")[1]
-			; create a log
-			log("DEBUG: prompt_update -> comparing " cloud_version "(cloud) to " app_version "(current)")
-
-			; Compares cloud to local version info to check if newer is available
-			if this._is_newer_version(cloud_version, this.current_version) == 1 {
-				this.prompt_update(cloud_version)
-			} else {
-				TrayTip("UpdateCheck(" cloud_version ")`nYou are on the latest version. (" this.current_version ")", this.display_name, "Mute")
-				; prompt_update(cloud_version,True)
-			}
-		} else (
-			msgbox("Unknown error when checking version")
-		)
 	}
+
+	_github_release_version() {
+
+		if (this.github_repo == "" || this.github_repo == "") {
+			MsgBox "[UpdateHandler]:: Unable to check for update, either missing RepoName or UserName", this.display_name " Missing Info!", 0x30
+			return false
+		}
+
+		Http := ComObject("WinHttp.WinHttpRequest.5.1")
+		this.API_URL := "https://api.github.com/repos/" . this.github_user . "/" . this.github_repo . "/releases/latest"
+		this.URL := "https://github.com/" . this.github_user . "/" . this.github_repo . "/releases/latest"
+
+		try {
+			Http.Open("GET", this.API_URL, false)
+			; GitHub API requires a User-Agent header
+			Http.SetRequestHeader("User-Agent", "CAL-Update-Checker")
+			Http.Send()
+
+			; Parse the JSON response
+			Response := json().load_string(Http.ResponseText)
+			this.latest_version := Response["tag_name"]
+			this.download_url := Response["assets"][1]["browser_download_url"] ; Assumes you uploaded a file
+
+		} catch Error as e {
+			if Response.has("assets") && Response["assets"].Length < 1 {
+				msg_str := "Lastest version seems to be missing download link! Please update manually from: `n" this.URL "`nCopy to clipboard?"
+				a := MsgBox(msg_str, this.display_name " update error!", "Icon! T60 yn")
+				if a == "yes"
+					A_Clipboard := this.URL
+			} else {
+				msg_str := "Unable to reach repository to check for updates::" e.Message "`n`nPlease check the below URL is valid:`n`n" this.API_URL "`nCopy to clipboard?"
+				a := MsgBox(msg_str, this.display_name " update error!", "Icon! T60 yn")
+				if a == "yes"
+					A_Clipboard := this.API_URL
+			}
+
+
+			this.latest_version := ""
+			this.download_url := ""
+			return false
+		}
+
+		return this.latest_version
+	}
+
+	_github_compare_and_notify_user(force_notification := false) {
+
+		if (this.current_version = "")
+			throw Error("UpdateHandler::EmptyVersionString::Unable to compare version!this.current_version == ''")
+
+		if (this.latest_version = "")
+			throw Error("UpdateHandler::EmptyVersionString::Unable to compare version!this.latest_version == ''")
+
+
+		log("DEBUG: prompt_update -> comparing " this.latest_version "(cloud) to " this.current_version "(current)")
+
+		; Compares cloud to local version info to check if newer is available
+		if this._is_newer_version(this.latest_version, this.current_version) == 1 {
+			this.prompt_update(this.latest_version)
+		} else {
+			if LOG_LEVEL <= 1 || force_notification
+				TrayTip("You are on the latest version. (" this.current_version ")", this.display_name, "Mute")
+			; prompt_update(cloud_version,True)
+		}
+
+	}
+
+
+	; _query_latest_version_then_callback(version_file_url, callback_function) {
+	; 	; send a GET request to version_file_url then sets a callback
+	; 	this.com_obj := ComObject("Msxml2.XMLHTTP")  ; used to make URL requests
+	; 	this.com_obj.open("GET", version_file_url, true)
+	; 	this.com_obj.onreadystatechange := callback_function
+	; 	this.com_obj.send()
+	; }
+
+	; ; Used as the callback listener for update request. Then compares versions and pings user
+	; compare_versions_and_notify() {
+	; 	; check if callback has a completed state
+	; 	if (this.com_obj.readyState != 4) {  ; Not done yet.
+	; 		return
+	; 	}
+	; 	; check if http code is a success (200)
+	; 	if (this.com_obj.status == 200) {
+	; 		; skim off and line returns
+	; 		cloud_version := strsplit(this.com_obj.responseText, "`r")[1]
+	; 		; create a log
+	; 		log("DEBUG: prompt_update -> comparing " cloud_version "(cloud) to " app_version "(current)")
+
+	; 		; Compares cloud to local version info to check if newer is available
+	; 		if this._is_newer_version(cloud_version, this.current_version) == 1 {
+	; 			this.prompt_update(cloud_version)
+	; 		} else {
+	; 			TrayTip("UpdateCheck(" cloud_version ")`nYou are on the latest version. (" this.current_version ")", this.display_name, "Mute")
+	; 			; prompt_update(cloud_version,True)
+	; 		}
+	; 	} else (
+	; 		msgbox("Unknown error when checking version")
+	; 	)
+	; }
 
 
 	; Compares cloud to local version info to check if newer is available
+	; - Expects #.#.#.# format
 	_is_newer_version(v_one, v_two) {
 		; receives version strings 1 & 2
 		; returns whichever is newer or 0/FALSE for neither
@@ -533,8 +752,11 @@ class UpdateHandler {
 		; clean strings
 		v_one := StrReplace(v_one, "`r", "")
 		v_one := StrReplace(v_one, "`n", "")
+		v_one := StrReplace(v_one, "v", "")
 		v_two := StrReplace(v_two, "`r", "")
 		v_two := StrReplace(v_two, "`n", "")
+		v_two := StrReplace(v_two, "v", "")
+
 
 		; split the variables into arrays for easy testing
 		v_one_array := StrSplit(v_one, ".")
@@ -542,7 +764,7 @@ class UpdateHandler {
 
 		; Check version lengths match
 		if v_one_array.Length != v_two_array.Length
-			return -1
+			throw Error("Versions string length do not match! (" v_one " :: " v_two ")")
 
 		; compare arrays until we find a larger one
 		loop v_one_array.Length {
@@ -555,33 +777,70 @@ class UpdateHandler {
 		return 0
 	}
 
-	; prompts the user with a alert/message that there is a newer version available
-	prompt_update(cloud_version := 0, force_redownload := False) {
-		; writes a powershell string the terminate itself for update
-		; checking for old in the APPDATA path
+	_write_ps1_unzip_and_run(unzip_path, ps1_name := "unzip_and_run") {
+		ps1_str := 'Stop-Process -Name "' A_ScriptFullPath '"`n'
+		ps1_str .= 'if(Test-Path -Path "' A_WorkingDir '\' this.script_name '.old") {Remove-Item "' A_WorkingDir '\' this.script_name '.old"}`n'
+		ps1_str .= 'while(Test-Path -Path "' A_ScriptFullPath '"){`n'
+		ps1_str .= 'Rename-Item -Path "' A_ScriptFullPath '" -NewName "' A_WorkingDir '\' this.script_name '.old" -force`n'
+		ps1_str .= 'Write-Host "Waiting for .olding ..." `n'
+		ps1_str .= 'start-sleep -seconds 1`n'
+		ps1_str .= '}`n'
+		ps1_str .= 'while(-not(Test-Path -Path "' unzip_path '")){`n'
+		ps1_str .= 'Write-Host "Waiting for download ... (' unzip_path ')" `n'
+		ps1_str .= 'start-sleep -seconds 0.5`n'
+		ps1_str .= '}`n'
+		ps1_str .= 'Expand-Archive -Path "' unzip_path '" -DestinationPath "' A_WorkingDir '\" -Force `n'
+		ps1_str .= 'while(-not(Test-Path -Path "' A_ScriptFullPath '")){`n'
+		ps1_str .= 'Write-Host "Waiting for unzip ... (' A_ScriptFullPath ' )" `n'
+		ps1_str .= 'start-sleep -seconds 0.5`n'
+		ps1_str .= '}`n'
+		ps1_str .= 'Remove-Item -path "' unzip_path '"`n'
+		ps1_str .= '& "' A_ScriptFullPath '"'
 
-		undate_ps1_str := 'Stop-Process -Name "' this.script_name '"`n'
-		undate_ps1_str .= 'if(Test-Path -Path "' A_WorkingDir '\' this.script_name '.old") {Remove-Item "' A_WorkingDir '\' this.script_name '.old"}`n'
-		undate_ps1_str .= 'Rename-Item -Path "' A_ScriptDir '\' this.script_name '.exe" -NewName "' A_WorkingDir '\' this.script_name '.old" -force`n'
-		undate_ps1_str .= 'if(Test-Path -Path "' A_ScriptDir '\' this.script_name '.exe"){ Remove-Item "' A_ScriptDir '\' this.script_name '.exe"}`n'
-		undate_ps1_str .= 'Rename-Item -Path "' A_ScriptDir '\' this.script_name '.new" -NewName "' A_ScriptDir '\' this.script_name '.exe" -force`n'
-		undate_ps1_str .= '& "' A_ScriptDir '\' this.script_name '.exe"'
+		; write to file
+		try FileDelete(A_WorkingDir "\" ps1_name ".ps1")
+		FileAppend(ps1_str, A_WorkingDir "\" ps1_name ".ps1")
+	}
+
+	; prompts the user with a alert/message that there is a newer version available
+	prompt_update(unused_var := "", force_redownload := False) {
+
+		; Build PS1 file to unzip file
+		zip_path := A_ScriptDir "\" this.script_name "-" this.latest_version ".zip"
+		ps1_name := "unzip_and_run"
+		this._write_ps1_unzip_and_run(zip_path, ps1_name)
 
 		if !force_redownload
-			answer := msgbox("NEWER version (" cloud_version ") available`n`n" this.download_url, , "y/n")
+			answer := msgbox(this.display_name " has an update available (" this.latest_version ")!`n`nManual URL:`n" this.download_url "`n`nWould you like to update now?", "Update " this.display_name "(" this.current_version ")?", "Icon? yn")
 		if force_redownload or answer = "yes" {
-			download this.download_url, A_ScriptDir "\" this.script_name ".new"
+			; attempt to download the file and unzip it
 			try {
-				download this.download_url "_img.zip", A_WorkingDir "\" script_name ".exe_img.zip"
-				this._unzip(A_WorkingDir "\" script_name ".exe_img.zip", A_WorkingDir "\img")  ; #TODO possible dynamic file path inconsistancy
-			} catch {
-				log("ERR:prompt_update()>Trouble downloading _img ")
-			}
-			try
-				FileDelete("update.ps1")
-			FileAppend(undate_ps1_str, A_WorkingDir "\update.ps1")
+				download this.download_url, zip_path
+				Run("PowerShell.exe -ExecutionPolicy Bypass -File .\" ps1_name ".ps1")
 
-			Run("PowerShell.exe .\update.ps1")
+				; this._unzip(zip_path, A_WorkingDir "\")
+			} catch Error {
+				log("ERR:UpdateHandler:prompt_update()>Trouble downloading:`n" Error)
+			}
+
+
+			; ; replace update batch
+			; try
+			; 	FileDelete(this.display_name "_update.bat")
+			; ; Now run attempt to self replace
+			; ; /c tells cmd to run the string and then terminate
+			; ; 'timeout 2' gives the AHK script a second to fully close and release the file lock we could make this longer
+			; BatchCommand := 'timeout /t 5 /nobreak > NUL && '
+			; 	. 'del "' A_ScriptFullPath '" && '
+			; 	. 'move "' this.latest_version "-" this.script_name "." SubStr(A_ScriptFullPath, -3) '" "' A_ScriptFullPath '" && '
+			; 	. 'start "" "' A_ScriptFullPath '" && pause'
+
+			; ; Run the Batch command hidden
+			; ; Run(A_ComSpec ' /c ' BatchCommand, , "Hide")
+			; Run(A_ComSpec ' /c ' BatchCommand, , "Hide")
+
+			; ; Exit immediately so the file is no longer locked
+			; ExitApp()
 		}
 	}
 
@@ -590,7 +849,7 @@ class UpdateHandler {
 		DirCreate(destination)
 		;https://www.autohotkey.com/boards/viewtopic.php?t=59016
 		; errors := RunWait( "PowerShell.exe -Command Expand-Archive -LiteralPath '" A_WorkingDir "\" source "' -DestinationPath " A_WorkingDir "\" destination,,"hide" )
-		errors := RunWait("PowerShell.exe -Command Expand-Archive -LiteralPath '" source "' -DestinationPath " destination)
+		errors := RunWait("PowerShell.exe -Command Expand-Archive -LiteralPath '" source "' -DestinationPath " destination " -force")
 		if A_LastError
 			log("WARN:error " errors " unzipping '" source "' to '" destination "'")
 	}
@@ -1309,8 +1568,13 @@ class ConfigEntry {
 	}
 
 	ToString() {
-		try
-			Return "ConfigEntry(k:" this.key ")(v:" this.value ")"
+		try {
+			report_str := "ConfigEntry(k:" this.key " v:" this.value ") [" this.type "]"
+			if this.has_toggle {
+				report_str .= "{bool:" this.toggle "}"
+			}
+			Return report_str
+		}
 		catch
 			return "ConfigEntry(ERROR key type =" type(this.key) " v=" type(this.value) ")"
 	}
@@ -1320,6 +1584,13 @@ class ConfigEntry {
 ; Class for managing/saving/loading/referencing persistant variables
 ; with a built in GUI for exposing them to the user
 ; - can be given MetaInfo and TrayBuilder objects
+;
+; Usage sample
+; cfg := ConfigManagerTool(cfg_path, "ConfigSettings",,script_meta)
+; cfg.ini("bump_distance",,200,"edit","Distance in pixels to move the mouse when bumping it.")
+; cfg.load_all()
+; cfg.gui_open()
+; cfg.bind_all_keys()
 class ConfigManagerTool {
 	; Class for managing/saving/loading/referencing settings & configurations with a built in GUI for exposing them to the user
 	; - file_name (String) The filename or fullpath of the ini file you'd like to use
@@ -1368,6 +1639,7 @@ class ConfigManagerTool {
 	; - config_entry (Class ConfigEntry) the entry from CfgMgr you want to update
 	; - callback_func (FuncObject) the function you want to have called if any when complete
 	; - - callback_func **MUST** support a positional variable of String type containing new value
+	; 262801 - this might not be used and isn't well named, seems to be hotkey related
 	change_single_variable(config_entry, callback_func := False) {
 		desired_hotkey := Inputbox("Set new value for '" config_entry.key "'. `nExtra: " config_entry.info)
 		if desired_hotkey.result = "OK" {
@@ -1860,9 +2132,17 @@ class ConfigManagerTool {
 		} catch any as e {
 			; this is to catch when file doesn't contain any valid sections
 			if e.Message = "The requested key, section or file was not found." {
-				log("WARN:CfgMgr: Unable to find requested section or key in ini file! Should only happen when INI is empty. Will try to rename to create new one.")
-				try
+				log("WARN:CfgMgr: Unable to find requested section or key in ini file! Should only happen when INI is empty or when using a new section.")
+				try {
+					FileAppend("[" this.section "]`n", this.fn)
+				}
+				catch {
+
+					log("WARN:CfgMgr: File update failed! Olding file")
 					FileMove(this.fn, this.fn ".old" A_Now)
+				}
+
+
 				return
 			}
 			throw e
@@ -4280,6 +4560,47 @@ class UE4CoordHandler {
 	; }
 }
 
+; Generic bass class
+; Supports
+;   .ToString()
+class ChipyBaseObject extends Object {
+	; helper to accept ObjectLitteral {key:value} style hashtable/map objects as input
+	_support_key_value_object_input(input_object) {
+		; checke that input tyoe is valid for itterating
+		if (Type(input_object) != "Object") {
+			return false
+		}
+		try {
+			; Handle Array input types
+			; if input_object != false {
+			for k, v in input_object.OwnProps() {
+				this.%k% := v
+			}
+			; }
+			return true
+		} catch Error as e {
+			log("ERROR: " Type(this) " threw the following trying to accepted (" Type(input_object) ") as input: " e.Message)
+			throw e
+		}
+		return false
+	}
+
+	; Outputs all OwnProperties to a string
+	ToString() {
+		try {
+			data_string := Type(This) "("
+			for k, v in this.OwnProps() {
+				data_string .= k "=" String(v) ", "
+			}
+			data_string := SubStr(data_string, 1, -2) ")"
+			return data_string
+		} catch Error as e {
+			log("ERROR: " Type(this) " threw the following trying .ToString(): " e.Message)
+		}
+	}
+}
+
+
 /*
 [][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][]
 [][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][]
@@ -4289,6 +4610,7 @@ class UE4CoordHandler {
 [][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][]
 [][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][]
 */
+
 
 human_click(butt, x := 0, y := 0) {
 	con := 0
@@ -4634,6 +4956,8 @@ run_script_on_startup(mode := "") {
 		default:
 			return is_present
 	}
+	; MIGHT NEED
+	; Tray_setup()
 }
 
 hex_to_rgb(rgb_hex) {
@@ -4932,17 +5256,17 @@ string_validation(in_string, black_list := "", ordial_range_start := 33, ordinal
 [][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][]
 */
 
-tooltip_timeout(time_before_clearing := 2000) {
-	SetTimer (*) => clear_tooltips(), time_before_clearing
+tooltip_timeout(time_before_clearing := 2000, tooltip_index_to_clear := 0) {
+	SetTimer (*) => clear_tooltips(tooltip_index_to_clear), time_before_clearing
 }
 
-clear_tooltips(tooltip_index_to_clear := -1) {
+clear_tooltips(tooltip_index_to_clear := false) {
 	if tooltip_index_to_clear {
-		tooltip(, , tooltip_index_to_clear)
+		tooltip(, , , tooltip_index_to_clear)
 		Return True
 	}
 	loop 9 {
-		tooltip , , A_Index
+		tooltip(, , , A_Index)
 	}
 }
 
@@ -4990,6 +5314,39 @@ reload_as_admin() {
 ; Simple wrapper to support Tray and other references to reload as a function
 exit_alias(*) {
 	ExitApp
+}
+
+; Alias for a2s - tries to convert Array to String
+array_to_string(input_array, title := "Array::", delimiter := ",") {
+	return a2s(input_array, title, delimiter)
+}
+; primitive array2string display concat
+a2s(array, title := "Params::", delimiter := ",") {
+	rstr := ""
+	len := Type(array) == "Array" ? array.length : Type(array)
+
+	try {
+		for entry in array {
+			if Type(entry) == "Array" {
+				entry := a2s(entry, "Array")
+			}
+			rstr .= entry . delimiter
+		}
+		return title "[" SubStr(rstr, 1, -1) "](" len ")"
+	} catch TypeError as e {
+		MsgBox "Invalid type(" Type(array) ")! The array_to_string cannot process it.`n" e.Message
+	} catch Error as e {
+		MsgBox "Failed to convert array to string: " Type(e) "::" e.Message
+	}
+}
+
+; Simple placeholder function to be used for func_obj or funcReff (and returns)
+; notify - Bool/String :: cane but used to detail response
+place_holder(notify := false, returns_value := false) {
+	; do nothing
+	if notify
+		MsgBox "place_holder()`n`nDetails:`n`tNotify: " notify "`n`tReturn: " returns_value
+	return returns_value
 }
 
 
