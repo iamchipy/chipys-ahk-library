@@ -49,15 +49,77 @@ HOTKEY_CHEATSHEET .= "LBUTTON, MBUTTON, RBUTTON`n"
 ; CONSTANTS with defaults, expected to be overwritten by scripts
 ;=======================================================
 /*
-- 0-0[SPAM]		Spam messages just to report everything
+- 0-0[SPAM]	Spam messages just to report everything
 - 1-2[DEBUG]	Debugging info for detailed reports on things
-- 3-4[INFO]		Info for verbose reports even a user might read
-- 5-6[WARN]		Warnings for things a user might need to know are important
+- 3-4[INFO]	Info for verbose reports even a user might read
+- 5-6[WARN]	Warnings for things a user might need to know are important
 - 7-8[ALERT]	Alerts for when you ned to let the user know something is WRONG or failed
-- 9-9[ERR]		Error reports (critical possible even terminatino/crash levels)
+- 9-9[ERR]	Error reports (critical possible even terminatino/crash levels)
 - +10[REPORT]	Forced display for things that just need to be logged always
 */
-global LOG_LEVEL := 5
+class LogLevel {
+	static SPAM := 0, DEBUG := 1, INFO := 3, WARN := 5, ALERT := 7, ERR := 9, REPORT := 10, NONE := 99
+	static DICT := Map(
+		"SPAM", this.SPAM,
+		"DEBUG", this.DEBUG,
+		"INFO", this.INFO,
+		"WARN", this.WARN,
+		"ALERT", this.ALERT,
+		"ERR", this.ERR,
+		"REPORT", this.REPORT,
+		"NONE", this.NONE,
+	)
+	static REVERSE := Map(
+		this.SPAM, "SPAM",
+		this.DEBUG, "DEBUG",
+		this.INFO, "INFO",
+		this.WARN, "WARN",
+		this.ALERT, "ALERT",
+		this.ERR, "ERR",
+		this.REPORT, "REPORT",
+		this.NONE, "NONE",
+	)
+	static VALID_OPTIONS := ["REPORT", "ERR", "ALERT", "WARN", "INFO", "DEBUG", "SPAM"]
+
+	; Returns a valid log_level int value matching input_string OR 99 if invalid
+	static Call(enum_string) {
+		; Same as:
+		; static Call(enum_string) => this.validate(enum_string)
+		return this.validate(enum_string)
+	}
+
+	; Validates input AKA string lookup with default value
+	; Returns a valid log_level int value matching input_string OR 99 if invalid
+	static validate(string_to_evaluate) {
+		; return the static ENUM match via the Map
+		if this.DICT.Has(StrUpper(string_to_evaluate))
+			return this.DICT[StrUpper(string_to_evaluate)]
+		if this.REVERSE.Has(string_to_evaluate)
+			return this.REVERSE[string_to_evaluate]
+		return this.NONE
+	}
+
+	; Returns the index within VALID_OPTIONS if there is a match
+	; defaults to "1" if not found
+	static index_of(string_to_evaluate) {
+		for index, value in this.VALID_OPTIONS {
+			; MsgBox "searching for '" string_to_evaluate "' vs index::" index " v'" value "'"
+			if (string_to_evaluate = value) {
+				return index
+			}
+		}
+		return 1
+	}
+
+	; Returns array of valid LOG_LEVEL strings ordered by value
+	static options() {
+		return this.VALID_OPTIONS
+	}
+
+
+}
+
+global LOG_LEVEL := LogLevel.INFO
 global SCRIPT_NAME := "DefaultChipysUtilityLibraryName"
 global CFG_PATH := SCRIPT_NAME ".cfg"
 global LOG_PATH := SCRIPT_NAME ".log"
@@ -662,7 +724,9 @@ class UpdateHandler {
 			; Parse the JSON response
 			Response := json().load_string(Http.ResponseText)
 			this.latest_version := Response["tag_name"]
-			this.download_url := Response["assets"][1]["browser_download_url"] ; Assumes you uploaded a file
+			this.download_url := Response["assets"][1]["browser_download_url"]
+			try
+				this.patch_notes := Response["assets"][1]["body"]
 
 		} catch Error as e {
 			if Response.has("assets") && Response["assets"].Length < 1 {
@@ -707,41 +771,6 @@ class UpdateHandler {
 		}
 
 	}
-
-
-	; _query_latest_version_then_callback(version_file_url, callback_function) {
-	; 	; send a GET request to version_file_url then sets a callback
-	; 	this.com_obj := ComObject("Msxml2.XMLHTTP")  ; used to make URL requests
-	; 	this.com_obj.open("GET", version_file_url, true)
-	; 	this.com_obj.onreadystatechange := callback_function
-	; 	this.com_obj.send()
-	; }
-
-	; ; Used as the callback listener for update request. Then compares versions and pings user
-	; compare_versions_and_notify() {
-	; 	; check if callback has a completed state
-	; 	if (this.com_obj.readyState != 4) {  ; Not done yet.
-	; 		return
-	; 	}
-	; 	; check if http code is a success (200)
-	; 	if (this.com_obj.status == 200) {
-	; 		; skim off and line returns
-	; 		cloud_version := strsplit(this.com_obj.responseText, "`r")[1]
-	; 		; create a log
-	; 		log("DEBUG: prompt_update -> comparing " cloud_version "(cloud) to " app_version "(current)")
-
-	; 		; Compares cloud to local version info to check if newer is available
-	; 		if this._is_newer_version(cloud_version, this.current_version) == 1 {
-	; 			this.prompt_update(cloud_version)
-	; 		} else {
-	; 			TrayTip("UpdateCheck(" cloud_version ")`nYou are on the latest version. (" this.current_version ")", this.display_name, "Mute")
-	; 			; prompt_update(cloud_version,True)
-	; 		}
-	; 	} else (
-	; 		msgbox("Unknown error when checking version")
-	; 	)
-	; }
-
 
 	; Compares cloud to local version info to check if newer is available
 	; - Expects #.#.#.# format
@@ -802,49 +831,37 @@ class UpdateHandler {
 		FileAppend(ps1_str, A_WorkingDir "\" ps1_name ".ps1")
 	}
 
-	; prompts the user with a alert/message that there is a newer version available
-	prompt_update(unused_var := "", force_redownload := False) {
-
+	_download_and_update() {
 		; Build PS1 file to unzip file
 		zip_path := A_ScriptDir "\" this.script_name "-" this.latest_version ".zip"
 		ps1_name := "unzip_and_run"
 		this._write_ps1_unzip_and_run(zip_path, ps1_name)
 
-		if !force_redownload
-			answer := msgbox(this.display_name " has an update available (" this.latest_version ")!`n`nManual URL:`n" this.download_url "`n`nWould you like to update now?", "Update " this.display_name "(" this.current_version ")?", "Icon? yn")
-		if force_redownload or answer = "yes" {
-			; attempt to download the file and unzip it
-			try {
-				download this.download_url, zip_path
-				Run("PowerShell.exe -ExecutionPolicy Bypass -File .\" ps1_name ".ps1")
+		; attempt to download the file and unzip it
+		try {
+			download this.download_url, zip_path
+			Run("PowerShell.exe -ExecutionPolicy Bypass -File .\" ps1_name ".ps1")
 
-				; this._unzip(zip_path, A_WorkingDir "\")
-			} catch Error {
-				log("ERR:UpdateHandler:prompt_update()>Trouble downloading:`n" Error)
-			}
-
-
-			; ; replace update batch
-			; try
-			; 	FileDelete(this.display_name "_update.bat")
-			; ; Now run attempt to self replace
-			; ; /c tells cmd to run the string and then terminate
-			; ; 'timeout 2' gives the AHK script a second to fully close and release the file lock we could make this longer
-			; BatchCommand := 'timeout /t 5 /nobreak > NUL && '
-			; 	. 'del "' A_ScriptFullPath '" && '
-			; 	. 'move "' this.latest_version "-" this.script_name "." SubStr(A_ScriptFullPath, -3) '" "' A_ScriptFullPath '" && '
-			; 	. 'start "" "' A_ScriptFullPath '" && pause'
-
-			; ; Run the Batch command hidden
-			; ; Run(A_ComSpec ' /c ' BatchCommand, , "Hide")
-			; Run(A_ComSpec ' /c ' BatchCommand, , "Hide")
-
-			; ; Exit immediately so the file is no longer locked
-			; ExitApp()
+			; this._unzip(zip_path, A_WorkingDir "\")
+		} catch Error {
+			log("ERR:UpdateHandler:prompt_update()>Trouble downloading:`n" Error)
 		}
 	}
 
+	; prompts the user with a alert/message that there is a newer version available
+	prompt_update(unused_var := "", force_redownload := False) {
+		if force_redownload {
+			this._download_and_update()
+			return
+		}
+
+		info_body_text := "Manual URL:`n" this.download_url "`n`n" this.patch_notes
+
+		UITool.UpdatePrompt((*) => this._download_and_update(), this.display_name " has an update available!", "Would you like to update " this.display_name "(" this.current_version ") to version " this.latest_version "?", info_body_text)
+	}
+
 	; pulled from https://www.autohotkey.com/boards/viewtopic.php?t=103864
+	; DISCONTINUED
 	_unzip(source, destination) {
 		DirCreate(destination)
 		;https://www.autohotkey.com/boards/viewtopic.php?t=59016
@@ -1895,7 +1912,13 @@ class ConfigManagerTool {
 				this.gui.Add(obj.type, "xp+" height_margin_increment " w" round(GUI_FONT_SIZE * 10) " v" key, obj.value).OnEvent("change", (obj_of_event, *) => this.on_change(obj_of_event))
 			if obj.type = "Slider"
 				this.gui.Add(obj.type, "xp+" height_margin_increment " w" round(GUI_FONT_SIZE * 10) " v" key, obj.value)
+			if obj.type = "DropDownList" {
+				temp_drop_list := this.gui.Add(obj.type, "xp+" height_margin_increment " w" round(GUI_FONT_SIZE * 10) " v" key, obj.pipelist)
+				; try selecting the previous value, if we have one, via the LogLevel validation and arrayBase:1
+				try
+					temp_drop_list.Choose(1 + LogLevel.index_of(obj.value))
 
+			}
 			;add ons
 			if obj.has_toggle
 				this.gui.Add("Checkbox", "xp+" 7.1 * height_margin_increment " v" key "_toggle checked" obj.toggle, "Enabled")
