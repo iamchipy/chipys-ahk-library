@@ -21,7 +21,7 @@ if A_AhkVersion != "2.0.19" and !A_IsCompiled {  ;no longer logical here: and si
 ;=======================================================
 ; CONSTANTS and FLAGS
 ;=======================================================
-global CAL_VERSION := "5.04"
+global CAL_VERSION := "5.05"
 global ROAMING := A_AppData "\Chipys-AHK-Library"
 global GUI_FONT_SIZE := "20"		;scaled of base of 20
 global NATO_UI_FONT := "Share Tech Mono.ttf"
@@ -686,6 +686,7 @@ class UpdateHandler {
 		this.current_version := current_version
 		this.github_repo := github_repo
 		this.github_user := github_user
+		this.patch_notes := ""
 
 
 		; start the query for cloud version
@@ -725,19 +726,18 @@ class UpdateHandler {
 			Response := json().load_string(Http.ResponseText)
 			this.latest_version := Response["tag_name"]
 			this.download_url := Response["assets"][1]["browser_download_url"]
-			try
-				this.patch_notes := Response["assets"][1]["body"]
+			this.patch_notes := Response["body"]
 
 		} catch Error as e {
 			if Response.has("assets") && Response["assets"].Length < 1 {
 				msg_str := "Lastest version seems to be missing download link! Please update manually from: `n" this.URL "`nCopy to clipboard?"
 				a := MsgBox(msg_str, this.display_name " update error!", "Icon! T60 yn")
-				if a == "yes"
+				if a = "yes"
 					A_Clipboard := this.URL
 			} else {
 				msg_str := "Unable to reach repository to check for updates::" e.Message "`n`nPlease check the below URL is valid:`n`n" this.API_URL "`nCopy to clipboard?"
 				a := MsgBox(msg_str, this.display_name " update error!", "Icon! T60 yn")
-				if a == "yes"
+				if a = "yes"
 					A_Clipboard := this.API_URL
 			}
 
@@ -766,7 +766,7 @@ class UpdateHandler {
 			this.prompt_update(this.latest_version)
 		} else {
 			if LOG_LEVEL <= 1 || force_notification
-				TrayTip("You are on the latest version. (" this.current_version ")", this.display_name, "Mute")
+				TrayTip("You are on the latest version. (" this.current_version ")", this.display_name, 0x34)
 			; prompt_update(cloud_version,True)
 		}
 
@@ -857,7 +857,7 @@ class UpdateHandler {
 
 		info_body_text := "Manual URL:`n" this.download_url "`n`n" this.patch_notes
 
-		UITool.UpdatePrompt((*) => this._download_and_update(), this.display_name " has an update available!", "Would you like to update " this.display_name "(" this.current_version ") to version " this.latest_version "?", info_body_text)
+		UITool.UpdatePrompt((*) => this._download_and_update(), this.display_name " has an update available!", "Update " this.display_name "(" this.current_version " to " this.latest_version ")?", info_body_text)
 	}
 
 	; pulled from https://www.autohotkey.com/boards/viewtopic.php?t=103864
@@ -3445,105 +3445,6 @@ class ScenarioDetector {
 	}
 }
 
-class UpdateTool {
-	; Class discontined in favour of class UpdateHandler
-	; PLEASE USE THAT
-
-
-	; __new(current_version, remote_version_url, remote_installer_url, change_log_url:="", tray_icons:=0){
-	; 	this.change_log_url:=change_log_url
-	; 	this.current_version := current_version
-	; 	this.v_url := remote_version_url
-	; 	this.installer_url := remote_installer_url
-	; 	SplitPath remote_installer_url , &n, , &e
-	; 	this.installer_name := n  ;"." e    ;concat filename + extention for downloading
-	; 	this.last_known_remote_version := "2.00"
-	; 	this.icons:=tray_icons
-
-	; 	this.populated := 0						;info check to allow early calls to know if we've fetched remote info yet
-	; 	this.is_update_available := 0 			;bool telling up if remote is newer
-	; }
-
-	; _populate_info(is_forced:=0){ ;this method allows for the obj creation without 'hanging' while GET-requests go on
-	; 	this.is_update_available := this.is_remote_newer()
-	; 	this.populated := 1
-	; 	disp("Checking for updates . . .", 3)
-	; 	if !is_forced && this.is_remote_newer()
-	; 		this.prompt()
-	; }
-
-	; _get_remote_version(){
-	; 	try{
-	; 		ldata := url_get(this.v_url)
-	; 	}catch any as e{
-	; 		CULErrorHandler(e, "update-tool-")
-	; 	}
-	; 	if(!ldata){
-	; 		; #TODO reduce msgbox interupts
-	; 		MsgBox "Could not connect to remote server!`r`nUnable to update.`r`nerror 433: while trying to check remote version "
-	; 		Return 0
-	; 	}
-	; 	this.last_known_remote_version := round(float(ldata),2)		;round to .00
-	; 	Return ldata
-	; }
-
-	; is_remote_newer(){
-	; 	if this._get_remote_version() > this.current_version{
-	; 		if this.icons
-	; 			TraySetIcon(this.icons[1],,1)
-	; 		Return 1
-	; 	}
-	; 	Return 0
-	; }
-
-	; prompt(check_latest_version:=1){
-	; 	if !this.populated
-	; 		this._populate_info(1)
-	; 	if check_latest_version
-	; 		this._get_remote_version()
-	; 	version_report:="Update to v" round(this.last_known_remote_version,2) " (from v" this.current_version ")"
-	; 	changes_txt:="No changelog found"
-	; 	if this.change_log_url
-	; 		changes_txt := url_get(this.change_log_url)
-
-	; 	temp := UITool.UpdatePrompt((*)=>this.update_now(),"Do you wish to update?",version_report, changes_txt)
-	; }
-
-	; update_now(){
-	; 	log('WARN:GENERIC_MISSING_ELEMENT_MSGBOX("Self Update Discontinuted")')
-	; 	Return
-	; 	/*
-	; 	; Download "https://raw.githubusercontent.com/sgmsm/CARKA/master/CARKA_Installer.exe", "CARKA_Installer.exe"
-	; 	temp:=UITool.ProgressBar("Downloading . . .")
-	; 	download this.installer_url, a_workingdir "\" this.installer_name
-	; 	if DEBUG
-	; 		tooltip "setting to 50% progress"
-	; 	temp.update(50)
-	; 	while !FileExist(a_workingdir "\" this.installer_name){
-	; 		sleep 500
-	; 	}
-
-	; 	if DEBUG
-	; 		tooltip "wd: " a_workingdir "`nname: " this.installer_name "`n`n" a_workingdir "\" this.installer_name " has been found"
-
-	; 	;building run commands string into a single var for simplicity and debugging
-	; 	run_str := '"' a_workingdir '\' this.installer_name '" ' 	;file to run followed by args
-	; 	run_str .= DllCall("GetCurrentProcessId") " " 				;arg1 carka process id for killing
-	; 	run_str .= this.current_version " " 						;arg2 curent var for backing up name
-	; 	run_str .= round(this.last_known_remote_version,2) " " 		;arg3 remote version for showing what is downloading
-	; 	run_str .= '"' A_ScriptFullPath '"'							;arg4 exact name to replace with new download
-
-	; 	if DEBUG
-	; 		msgbox run_str
-
-	; 	Run(run_str)
-	; 	temp.Destroy()
-	; 	;exits the app to allow for update to replace it
-	; 	ExitApp "updating..."
-	; 	*/
-	; }
-}
-
 class LicenseTool {
 	; ### LicenseTool __new(user_name, custom_url, icon_path:=0, consequence_method:=0, unconsequence_method:=0)
 	; tool used to get a unique identifier code for hardware and mix with username then compare to web url presence
@@ -4708,8 +4609,7 @@ on_screen_feedback_line(activity := "", index := 1, to_hide := 0, duration := 50
 		display_text := " " activity
 	}
 
-	if LOG_LEVEL {	;if in debug/developermode
-		; ((statement) ? (TRUE-action) : (FALSE-action))
+	if LOG_LEVEL <= LogLevel.DEBUG {	
 		global ticker := ((ticker = "-") ? (ticker := "\") : (((ticker = "\") ? (ticker := "/") : (ticker := "-"))))
 		display_text := display_text " " ticker
 	}
