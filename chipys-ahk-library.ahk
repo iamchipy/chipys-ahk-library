@@ -52,34 +52,44 @@ HOTKEY_CHEATSHEET .= "LBUTTON, MBUTTON, RBUTTON`n"
 - 0-0[SPAM]	Spam messages just to report everything
 - 1-2[DEBUG]	Debugging info for detailed reports on things
 - 3-4[INFO]	Info for verbose reports even a user might read
-- 5-6[WARN]	Warnings for things a user might need to know are important
-- 7-8[ALERT]	Alerts for when you ned to let the user know something is WRONG or failed
+- 5-6[ALERT]	Alerts for when you ned to let the user know something is WRONG or failed
+- 7-8[WARN]	Warnings for things a user might need to know are important
 - 9-9[ERR]	Error reports (critical possible even terminatino/crash levels)
 - +10[REPORT]	Forced display for things that just need to be logged always
 */
 class LogLevel {
-	static SPAM := 0, DEBUG := 1, INFO := 3, WARN := 5, ALERT := 7, ERR := 9, REPORT := 10, NONE := 99
+	static SPAM := 0, DEBUG := 1, INFO := 3, ALERT := 5, WARN := 7, ERR := 9, REPORT := 10, NONE := 99
 	static DICT := Map(
 		"SPAM", this.SPAM,
 		"DEBUG", this.DEBUG,
 		"INFO", this.INFO,
-		"WARN", this.WARN,
 		"ALERT", this.ALERT,
+		"WARN", this.WARN,
 		"ERR", this.ERR,
 		"REPORT", this.REPORT,
 		"NONE", this.NONE,
+	)
+	static DESCRIPTIONS_MAP := Map(
+		this.SPAM, "0-0[SPAM]	Spam messages just to report everything",
+		this.DEBUG, "1-2[DEBUG]	Debugging info for detailed reports on things",
+		this.INFO, "3-4[INFO]	Info for verbose reports even a user might read",
+		this.ALERT, "5-6[ALERT]	Alerts for when you ned to let the user know something is WRONG or failed",
+		this.WARN, "7-8[WARN]	Warnings for things a user might need to know are important",
+		this.ERR, "9-9[ERR]		Error reports (critical possible even terminatino/crash levels)",
+		this.REPORT, "10[REPORT]	Forced display for things that just need to be logged always",
+		this.NONE, "[NONE]		Internal value for safetly/invalid catches, not to be used"
 	)
 	static REVERSE := Map(
 		this.SPAM, "SPAM",
 		this.DEBUG, "DEBUG",
 		this.INFO, "INFO",
-		this.WARN, "WARN",
 		this.ALERT, "ALERT",
+		this.WARN, "WARN",
 		this.ERR, "ERR",
 		this.REPORT, "REPORT",
 		this.NONE, "NONE",
 	)
-	static VALID_OPTIONS := ["REPORT", "ERR", "ALERT", "WARN", "INFO", "DEBUG", "SPAM"]
+	static VALID_OPTIONS := ["REPORT", "ERR", "WARN", "ALERT", "INFO", "DEBUG", "SPAM"]
 
 	; Returns a valid log_level int value matching input_string OR 99 if invalid
 	static Call(enum_string) {
@@ -112,10 +122,27 @@ class LogLevel {
 	}
 
 	; Returns array of valid LOG_LEVEL strings ordered by value
-	static options() {
+	static options_as_array() {
 		return this.VALID_OPTIONS
 	}
 
+
+	static descriptions(as_array := false) {
+		if as_array {
+			desc_array := []
+
+			for _, desc in this.DESCRIPTIONS_MAP
+				desc_array.Push(desc)
+
+			return desc_array
+		}
+
+		desc_str := ""
+		for _, desc in this.DESCRIPTIONS_MAP
+			desc_str .= desc "`n"
+
+		return desc_str
+	}
 
 }
 
@@ -1627,6 +1654,9 @@ class ConfigManagerTool {
 		this._protected_keys := []		;list of currently used keys
 		this.section_alt := this.section "_alt"
 
+		this.hover_tips := Map()  		; Mouse Hover Tips variable load
+		this.last_tooltip_handle := ""	; Tracker to help avoid tooltip-redraw spam/lag
+
 		this._load_meta_info()
 		; this._create_tray_entry()  NOT STATBLE
 		this.load_all()
@@ -1675,7 +1705,7 @@ class ConfigManagerTool {
 	; Method for triggering an info popup that displays the assigned help/about string if any exists
 	; - gui_obj (GUIObjectHWD) The GUI object handle of the desired help string to be displayed
 	; - - Also accepts the string name of the variable
-	info(gui_obj, assist := "") {
+	_show_info_msgbox(gui_obj, assist := "") {
 		; check for GUIObj
 		var_name := gui_obj
 		if type(gui_obj) != "String"
@@ -1686,6 +1716,21 @@ class ConfigManagerTool {
 			;any exeption will result in default no-info-msgbox
 			MsgBox "Sorry, no info avaliable for " substr(gui_obj.Name, 5), "Missing Info"
 		}
+	}
+
+	; callback for OnMessage to handle hover toolip info
+	_show_info_toolip(handle, timeout := 7000) {
+		; prevent lag/spam of large tooltips causing redrawn errors
+		if handle = this.last_tooltip_handle
+			return
+
+		; log that we've created this handle tooltip now
+		this.last_tooltip_handle := handle
+
+		; fetch the info and then display it
+		info := this.hover_tips.Get(handle, "")
+		ToolTip(info, , , 3)
+		; tooltip_timeout(timeout,3)
 	}
 
 	; Internal method used to unbind any hotkey, for safety mostly
@@ -1781,7 +1826,7 @@ class ConfigManagerTool {
 	; Method used for added a new variable using a GUI during runtime
 	; - custom_section (String) Name of the ini Header/Section to save the variable into
 	gui_add(custom_section := 0) {
-		this.gui := gui(" -MinimizeBox -DPIScale", "Settings Manager")
+		this.gui := gui("-MinimizeBox -DPIScale", "Settings Manager")
 		this.gui.setfont("c00cccc s" round(GUI_FONT_SIZE * 0.8) " q3", "Terminal")				; new gui style with gray and teal
 		this.gui.BackColor := "666666"								; gray bg for gui
 		this.gui.Add("edit", "xm w" round(GUI_FONT_SIZE * 4.8) " vnewkey", "key")
@@ -1797,8 +1842,6 @@ class ConfigManagerTool {
 		log("ALERT:SUSPENDING SCRIPT")
 		Suspend 1
 
-		; if args.length > 0 and Type(args[1]) = "ConfigManagerTool"
-		; 	MsgBox "matched"
 
 		try			;checks if gui object exists and closes incase double opening
 			this.gui.Destroy()
@@ -1810,11 +1853,11 @@ class ConfigManagerTool {
 
 		;highmargin var for page FileSystem
 		height_margin_modifier := (2.5 * GUI_FONT_SIZE)
-		height_margin_increment := GUI_FONT_SIZE * 1.5
+		height_margin_increment := GUI_FONT_SIZE * 1.45
 
 		; try{
 		;create a large window with all possible settings
-		this.gui := gui(" -MinimizeBox -DPIScale", this.section)
+		this.gui := gui(" -MinimizeBox -DPIScale ", this.section)
 		this.gui.setfont("c00cccc s" round(GUI_FONT_SIZE * 0.5) " q5", "Terminal")				; new gui style with gray and teal
 		this.gui.BackColor := "666666"								; gray bg for gui
 
@@ -1827,7 +1870,7 @@ class ConfigManagerTool {
 			this.gui.Add("text", "xm", strUpper(StrReplace(key, "_", " ")))
 
 			;help/discription buttons
-			this.gui.Addbutton("xp+180 vinfo" key, "?").onEvent("click", (gui_obj, *) => this.info(gui_obj, "2"))
+			this.gui.Addbutton("xp+180 vinfo" key, "?").onEvent("click", (gui_obj, *) => this._show_info_msgbox(gui_obj, "2"))
 
 			;main value item
 			if obj.type = "checkbox"
@@ -1857,7 +1900,9 @@ class ConfigManagerTool {
 			tab_names_array.push("Page " A_Index)			;add label with page #
 		}
 
-		this.tabs := this.gui.add("Tab3", "xm", tab_names_array)
+
+		; # TODO add tab styles (https://www.autohotkey.com/docs/v2/misc/Styles.htm#Tab)
+		this.tabs := this.gui.add("Tab3", "xm -" 0x800, tab_names_array)
 
 		;now add normal items
 		for key, obj in this.c {				;loop for each setting in the obj map[]
@@ -1868,11 +1913,10 @@ class ConfigManagerTool {
 			row_y := mod((row_current + row_extra), row_count)
 			this.tabs.UseTab(page_current)
 
-			;checks if entry in ini is something we know whwat to do with our how to handle
+			;checks if entry in ini is something we know what to do with or how to handle
 			if type(obj) != "ConfigEntry" {	;no longer treating as an error by just a text field
-				; msgbox "Encounterd possible faulty/old ini setting entry: '" key "' and will now attempt to self-correct"
-				; IniDelete this.fn, this.section , key
-				if LOG_LEVEL
+				log("WARN:CFGMGR:: Encounterd possible faulty/old ini setting entry: '" key "' NEEDS TO BE REMOVED FROM config.ini")
+				if LOG_LEVEL < 2
 					msgbox "Encounterd possible faulty/old ini setting entry: '" key "' NEEDS TO BE REMOVED FROM config.ini"
 				Continue
 			}
@@ -1883,9 +1927,9 @@ class ConfigManagerTool {
 			log("INFO:gui_open	||key: " string(key) "	||obj: " string(obj))
 
 			;help/discription buttons
-			this.gui.Addbutton("xp+" 8 * height_margin_increment " vinfo" key, "?").onEvent("click", (gui_obj, *) => this.info(gui_obj))
-			; if key = "debugmode"
-			; 	msgbox key
+			temp_info_button := this.gui.Add("text","xp+" 8 * height_margin_increment "  vinfo" key, "[?]")
+			temp_info_button.onEvent("click", (gui_obj, *) => this._show_info_msgbox(gui_obj))
+			this.hover_tips[temp_info_button.hwnd] := obj.info
 
 			;main value item
 			if obj.type = "edit" {
@@ -1934,13 +1978,14 @@ class ConfigManagerTool {
 
 		this.tabs.UseTab() ;pops back out of tabs placement
 		this.gui_button_save := this.gui.add("button", "xm", "Save").OnEvent("click", (*) => this.gui_save())
-		this.gui_button_reset := this.gui.add("button", "xp+" height_margin_increment * 5, "Reset").OnEvent("click", (*) => this.gui_reset())
+		this.gui_button_reset := this.gui.add("button", "xp+" height_margin_increment * 2, "Reset").OnEvent("click", (*) => this.gui_reset())
 		this.Gui.OnEvent("Escape", (*) => this.gui_close())
 		this.gui.OnEvent("Close", (*) => this.gui_close())
 		this.gui.show()
-		; }catch any as e{
-		; 	CULErrorHandler(e,"UNKNOWN gui error opening '" this.section "' section ' (key is at bottom of this msg)")
-		; }
+
+
+		; Mouse hover hook
+		OnMessage(0x0200, (w, l, m, h) => this._show_info_toolip(h)) ;ToolTip(tips.Get(h, ""))
 	}
 
 	gui_save(args*) {
@@ -4609,7 +4654,7 @@ on_screen_feedback_line(activity := "", index := 1, to_hide := 0, duration := 50
 		display_text := " " activity
 	}
 
-	if LOG_LEVEL <= LogLevel.DEBUG {	
+	if LOG_LEVEL <= LogLevel.DEBUG {
 		global ticker := ((ticker = "-") ? (ticker := "\") : (((ticker = "\") ? (ticker := "/") : (ticker := "-"))))
 		display_text := display_text " " ticker
 	}
