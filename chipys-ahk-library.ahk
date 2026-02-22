@@ -700,11 +700,13 @@ class MetaInfo {
 ; - scritp_name(str) - should be the name of your exe (without the .exe extention)
 ; - display_name(str) - should be the reader friendly display name of your script
 ; Notifications
-; - Toaster notificaiton of being on latest version controlled by LOG_LEVE < 1
-; - Toaster notifications are enforced when manually called
+; - 0 = none
+; - 1 = Update checks
+; - 2 = Update AVAILABLE
+; - 3 = both
 class UpdateHandler {
 
-	__new(download_url := "", current_version := "0.0.1", script_name := "DefaultScriptName", display_name := "DefaultDisplayName", github_repo := "", github_user := "iamchipy") {
+	__new(download_url := "", current_version := "0.0.1", script_name := "DefaultScriptName", display_name := "DefaultDisplayName", github_repo := "", github_user := "iamchipy", notifications := 2) {
 		; build variables and set defaults
 		this.version_file_url := download_url "_version.txt"
 		this.script_name := script_name
@@ -714,6 +716,7 @@ class UpdateHandler {
 		this.github_repo := github_repo
 		this.github_user := github_user
 		this.patch_notes := ""
+		this.notifications := notifications
 
 
 		; start the query for cloud version
@@ -789,12 +792,13 @@ class UpdateHandler {
 		log("DEBUG: prompt_update -> comparing " this.latest_version "(cloud) to " this.current_version "(current)")
 
 		; Compares cloud to local version info to check if newer is available
-		if this._is_newer_version(this.latest_version, this.current_version) == 1 {
-			this.prompt_update(this.latest_version)
+		if (this.notifications > 0 or force_notification) and this._is_newer_version(this.latest_version, this.current_version) == 1 {
+			if (this.notifications > 1) {
+				this.prompt_update(this.latest_version)
+			}
 		} else {
-			if LOG_LEVEL <= 1 || force_notification
+			if (this.notifications & 1 or force_notification)  ; bitwise if test
 				TrayTip("You are on the latest version. (" this.current_version ")", this.display_name, 0x34)
-			; prompt_update(cloud_version,True)
 		}
 
 	}
@@ -1657,6 +1661,12 @@ class ConfigManagerTool {
 		this.hover_tips := Map()  		; Mouse Hover Tips variable load
 		this.last_tooltip_handle := ""	; Tracker to help avoid tooltip-redraw spam/lag
 
+		; centralized theming in HEX RRGGBB
+		this.text_color := "00cccc"
+		this.bg_color := "202024"
+		this.bg_color_input := "19191d"
+		this.no_border_no_sunken := "-E0x200 -Border"
+
 		this._load_meta_info()
 		; this._create_tray_entry()  NOT STATBLE
 		this.load_all()
@@ -1827,8 +1837,8 @@ class ConfigManagerTool {
 	; - custom_section (String) Name of the ini Header/Section to save the variable into
 	gui_add(custom_section := 0) {
 		this.gui := gui("-MinimizeBox -DPIScale", "Settings Manager")
-		this.gui.setfont("c00cccc s" round(GUI_FONT_SIZE * 0.8) " q3", "Terminal")				; new gui style with gray and teal
-		this.gui.BackColor := "666666"								; gray bg for gui
+		this.gui.setfont("c" this.text_color " s" round(GUI_FONT_SIZE * 0.8) " q3", "Terminal")				; new gui style with gray and teal
+		this.gui.BackColor := this.bg_color								; gray bg for gui
 		this.gui.Add("edit", "xm w" round(GUI_FONT_SIZE * 4.8) " vnewkey", "key")
 		this.gui.Add("edit", "xp+" round(GUI_FONT_SIZE * 5) " w" round(GUI_FONT_SIZE * 10) " vnewvalue", "value")
 		this.gui_button_save := this.gui.add("button", "xm", "Save").OnEvent("click", (*) => this.gui_save_one(custom_section))
@@ -1852,14 +1862,15 @@ class ConfigManagerTool {
 		; MsgBox this
 
 		;highmargin var for page FileSystem
-		height_margin_modifier := (2.5 * GUI_FONT_SIZE)
-		height_margin_increment := GUI_FONT_SIZE * 1.45
+		height_margin_modifier := (2.4 * GUI_FONT_SIZE)
+		height_margin_increment := GUI_FONT_SIZE * 1.4
+		width_margin_increment := GUI_FONT_SIZE * 1.8
 
 		; try{
 		;create a large window with all possible settings
 		this.gui := gui(" -MinimizeBox -DPIScale ", this.section)
-		this.gui.setfont("c00cccc s" round(GUI_FONT_SIZE * 0.5) " q5", "Terminal")				; new gui style with gray and teal
-		this.gui.BackColor := "666666"								; gray bg for gui
+		this.gui.setfont("c" this.text_color " s" round(GUI_FONT_SIZE * 0.5) " q5", "Terminal")				; new gui style with gray and teal
+		this.gui.BackColor := this.bg_color								; gray bg for gui
 
 		;special "pre-settings" loop for settings to be left separately grouped
 		for key, obj in this.c2 {				;loop for each setting in the obj map[]
@@ -1922,12 +1933,12 @@ class ConfigManagerTool {
 			}
 
 			;title
-			this.gui.Add("text", "xm+" height_margin_increment " y" (height_margin_increment * row_y) + height_margin_modifier, strUpper(StrReplace(key, "_", " ")))
+			this.gui.Add("text", "xm+" 0.33 * width_margin_increment " y" (height_margin_increment * row_y) + height_margin_modifier, strUpper(StrReplace(key, "_", " ")))
 
 			log("INFO:gui_open	||key: " string(key) "	||obj: " string(obj))
 
 			;help/discription buttons
-			temp_info_button := this.gui.Add("text","xp+" 8 * height_margin_increment "  vinfo" key, "[?]")
+			temp_info_button := this.gui.Add("text", "xp+" 8 * width_margin_increment "  vinfo" key, "[?]")
 			temp_info_button.onEvent("click", (gui_obj, *) => this._show_info_msgbox(gui_obj))
 			this.hover_tips[temp_info_button.hwnd] := obj.info
 
@@ -1939,25 +1950,48 @@ class ConfigManagerTool {
 					log "DEBUG " obj.value[1]
 				}
 				if strlen(obj.value) > 25 {
+					; special case when accessories are dropdownlist presets
 					if type(obj.acc) = "array" and obj.acc[1] = "DropDownList"
-						this.gui.Add(obj.type, "xp+" height_margin_increment " w" round(GUI_FONT_SIZE * 10) " r3 v" key, obj.value)
+						this.gui.Add(obj.type, "xp+" width_margin_increment " w" round(GUI_FONT_SIZE * 10) " r3 v" key, obj.value)
 					else
-						this.gui.Add(obj.type, "xp+" height_margin_increment " w" round(GUI_FONT_SIZE * 20) " r3 v" key, obj.value)
+						this.gui.Add(obj.type, "xp+" width_margin_increment " w" round(GUI_FONT_SIZE * 20) " r3 v" key " +" 0x4, obj.value)
 					row_extra += 1
 				}
 				else {
 					log("INFO:" key "	||" obj.value "	||" obj.type)
-					this.gui.Add(obj.type, "xp+" height_margin_increment " w" round(GUI_FONT_SIZE * 10) " v" key, obj.value)
+					; extended edit customization
+					temp := this.gui.Add(obj.type, this.no_border_no_sunken " xp+" width_margin_increment " w" round(GUI_FONT_SIZE * 10) " v" key, obj.value)
+					temp.Opt("Background" this.bg_color_input " c" this.text_color)
 				}
 			}
+			;  Handle datetime inputs
+			if obj.type = "time" {
+				temp_time := this.gui.Add("DateTime", "xp+" width_margin_increment " w" round(GUI_FONT_SIZE * 10) " right v" key " 1 choose" obj.value, "hh:mm tt")
+				temp_time.Opt("-E0x200")
+				; ; Remove the Windows Theme so it accepts custom colors
+				; DllCall("UxTheme\SetWindowTheme", "Ptr", temp_time.Hwnd, "WStr", "", "WStr", "")
+				; ; Send the color messages directly to the control's handle
+				; ; 0x1006 = DTM_SETMCCOLOR | 4 = MCSC_MONTHBK | 1 = MCSC_TEXT
+				; SendMessage(0x1006, 0, 0x00ff00, temp_time.Hwnd)
+				; SendMessage(0x1006, 1, 0x00ff00, temp_time.Hwnd)
+				; SendMessage(0x1006, 2, 0x00ff00, temp_time.Hwnd)
+				; SendMessage(0x1006, 4, 0x00ff00, temp_time.Hwnd)
+				; ; custom message to send for setting background
+				; ; https://www.autohotkey.com/docs/v2/lib/GuiControls.htm#DateTime
+				; DTM_SETMCCOLOR := 0x1006
+				; MCSC_BACKGROUND := 0
+				; MCSC_TEXT := 1
+				; SendMessage(DTM_SETMCCOLOR, MCSC_TEXT, 0x00ff00, temp_time.Hwnd)
+				; SendMessage(0x1006, 4, 0x00ff00, temp_time.Hwnd)
+			}
 			if obj.type = "checkbox"
-				this.gui.Add(obj.type, "xp+" height_margin_increment " w" round(GUI_FONT_SIZE * 10) " v" key " checked" obj.value, "default: " obj.default)
+				this.gui.Add(obj.type, "xp+" width_margin_increment " w" round(GUI_FONT_SIZE * 10) " v" key " checked" obj.value, "default: " obj.default)
 			if obj.type = "hotkey"
-				this.gui.Add(obj.type, "xp+" height_margin_increment " w" round(GUI_FONT_SIZE * 10) " v" key, obj.value).OnEvent("change", (obj_of_event, *) => this.on_change(obj_of_event))
+				this.gui.Add(obj.type, "xp+" width_margin_increment " w" round(GUI_FONT_SIZE * 10) " v" key, obj.value).OnEvent("change", (obj_of_event, *) => this.on_change(obj_of_event))
 			if obj.type = "Slider"
-				this.gui.Add(obj.type, "xp+" height_margin_increment " w" round(GUI_FONT_SIZE * 10) " v" key, obj.value)
+				this.gui.Add(obj.type, "xp+" width_margin_increment " w" round(GUI_FONT_SIZE * 10) " v" key, obj.value)
 			if obj.type = "DropDownList" {
-				temp_drop_list := this.gui.Add(obj.type, "xp+" height_margin_increment " w" round(GUI_FONT_SIZE * 10) " v" key, obj.pipelist)
+				temp_drop_list := this.gui.Add(obj.type, "xp+" width_margin_increment " w" round(GUI_FONT_SIZE * 10) " v" key, obj.pipelist)
 				; try selecting the previous value, if we have one, via the LogLevel validation and arrayBase:1
 				try
 					temp_drop_list.Choose(1 + LogLevel.index_of(obj.value))
@@ -1965,20 +1999,27 @@ class ConfigManagerTool {
 			}
 			;add ons
 			if obj.has_toggle
-				this.gui.Add("Checkbox", "xp+" 7.1 * height_margin_increment " v" key "_toggle checked" obj.toggle, "Enabled")
+				this.gui.Add("Checkbox", "xp+" 7.1 * width_margin_increment " v" key "_toggle checked" obj.toggle, "Enabled")
 			if type(obj.acc) = "array" and obj.acc[1] = "DropDownList" {
 				;                                                                                                                         [acc_value]? no idea what this was
 				acc_value := ""																						; assigned to help with #warn
-				temp := this.gui.Add("DropDownList", "lowercase altsubmit xp+" 7.1 * height_margin_increment " w" round(GUI_FONT_SIZE * 10) " v" acc_value, obj.pipelist)
+				temp := this.gui.Add("DropDownList", "lowercase altsubmit xp+" 7.1 * width_margin_increment " w" round(GUI_FONT_SIZE * 10) " v" acc_value, obj.pipelist)
 				t := key 	; variable can't have changed between time of use and PHATarrow obj method so store value it it's own var
 				temp.OnEvent("change", (obj_of_event, *) => this.gui_apply_action_wheel_value(obj_of_event, t))
 			}
 
 		}
 
+		; SCALE up font for button attention
+		this.gui.setfont("c" this.text_color " s" round(GUI_FONT_SIZE * 0.8) " q5", "Terminal")
+		; END BUTTONS
 		this.tabs.UseTab() ;pops back out of tabs placement
-		this.gui_button_save := this.gui.add("button", "xm", "Save").OnEvent("click", (*) => this.gui_save())
-		this.gui_button_reset := this.gui.add("button", "xp+" height_margin_increment * 2, "Reset").OnEvent("click", (*) => this.gui_reset())
+		save := this.gui_button_save := this.gui.add("Text", "xm w" round(width_margin_increment * 4), "Save")
+		save.OnEvent("click", (*) => this.gui_save())
+		save.Opt("+E0x200 +0x400000 Center Background" this.bg_color_input)
+		reset := this.gui_button_reset := this.gui.add("Text", "xp+" width_margin_increment * 6 " w" round(width_margin_increment * 4), "Reset")
+		reset.OnEvent("click", (*) => this.gui_reset())
+		reset.Opt("+E0x200 +0x400000 Center Background" this.bg_color_input)
 		this.Gui.OnEvent("Escape", (*) => this.gui_close())
 		this.gui.OnEvent("Close", (*) => this.gui_close())
 		this.gui.show()
@@ -3040,7 +3081,6 @@ class ScenarioDetector {
 				this.x2,
 				this.y2,
 				variation)
-			; disbaled this.scale function
 			if this.last_coords != 0 {
 				this.x := this.last_coords[1]
 				this.y := this.last_coords[2]
