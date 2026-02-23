@@ -1966,6 +1966,9 @@ class ConfigManagerTool {
 			}
 			;  Handle datetime inputs
 			if obj.type = "time" {
+				if !obj.value
+					obj.value := "None"
+
 				temp_time := this.gui.Add("DateTime", "xp+" width_margin_increment " w" round(GUI_FONT_SIZE * 10) " right v" key " 1 choose" obj.value, "hh:mm tt")
 				temp_time.Opt("-E0x200")
 				; ; Remove the Windows Theme so it accepts custom colors
@@ -2027,6 +2030,8 @@ class ConfigManagerTool {
 
 		; Mouse hover hook
 		OnMessage(0x0200, (w, l, m, h) => this._show_info_toolip(h)) ;ToolTip(tips.Get(h, ""))
+
+		
 	}
 
 	gui_save(args*) {
